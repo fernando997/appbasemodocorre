@@ -144,10 +144,10 @@ function VistoriaEntregaContent() {
     if (!placa || !contrato) return
     setValidandoContrato(true)
     const form = new URLSearchParams()
-    form.append('apikey', 'sderfgy65434567uyt432wsdtyu90lkjfe32')
+    form.append('apikey', API_KEY)
     form.append('placa', placa.trim().toUpperCase())
     form.append('contrato', contrato)
-    fetch('https://modocorreapp.com.br/version-test/api/1.1/wf/vistoria-entrega', {
+    fetch(`${API_BASE}/vistoria-entrega`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
