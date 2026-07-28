@@ -1,0 +1,11 @@
+/src/components/ui/badge.tsx:41:9
+Type error: Object literal may only specify known properties, and ''data-slot'' does not exist in type 'WithBaseUIEvent<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>> | ((otherProps: WithBaseUIEvent<...>) => WithBaseUIEvent<...>)'.
+  39 |       {
+  40 |         className: cn(badgeVariants({ variant }), className),
+> 41 |         'data-slot': 'badge',
+     |         ^
+  42 |       },
+  43 |       props
+  44 |     ),
+Next.js build worker exited with code: 1 and signal: null
+Error: Command "npm run build" exited with 1

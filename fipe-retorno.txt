@@ -1,0 +1,43 @@
+{
+  "data": {
+    "veiculo": {
+      "procedencia": "Nacional",
+      "municipio": "Itapetininga",
+      "uf": "SP",
+      "placa": "UOO6E89",
+      "chassi": "9C2KC2500TR146514",
+      "situacao_do_chassi": null,
+      "marca_modelo": "Honda/cg 160 Start",
+      "ano": "2026/2026",
+      "capacidade_de_carga": "00000",
+      "combustivel": "Gasolina",
+      "cor": "Preta",
+      "potencia": "000",
+      "cilindradas": "0162",
+      "quantidade_passageiro": "2",
+      "tipo_montagem": "Completa",
+      "quantidade_de_eixos": "00",
+      "pbt": "00029",
+      "cmt": "00000",
+      "tipo_de_veiculo": "Motocicleta",
+      "tipo_carroceria": "Moto",
+      "n_motor": "KC25E0T146701",
+      "caixa_cambio": null,
+      "eixo_traseiro_dif": null,
+      "carroceria": null
+    },
+    "fipes": [
+      {
+        "codigo": "811139-1",
+        "marca_modelo": "HONDA CG 160 START",
+        "valor": 18711,
+        "tipo": 2,
+        "id_marca": 80,
+        "marca": "HONDA",
+        "modelo": "CG 160 START",
+        "id_modelo": 7525,
+        "id_modelo_ano": "2026-1"
+      }
+    ]
+  }
+}
