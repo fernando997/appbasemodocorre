@@ -12,7 +12,6 @@ type Unidade = { _id: string; 'Nome Unidade': string }
 const navItems = [
   { href: '/home', label: 'Início', labelMobile: 'Início', icon: Home },
   { href: '/dashboard', label: 'Dashboard', labelMobile: 'Dashboard', icon: LayoutDashboard },
-  { href: '/agendados', label: 'Agendados', labelMobile: 'Agend.', icon: KeyRound },
   { href: '/liberacao-cpf', label: 'Liberação', labelMobile: 'Liber.', icon: KeyRound },
   { href: '/recebimento', label: 'Recebimento', labelMobile: 'Receb.', icon: Bike },
   { href: '/movimentacao', label: 'Funções', labelMobile: 'Funções', icon: Activity },

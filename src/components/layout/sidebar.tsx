@@ -7,7 +7,6 @@ import {
   Home,
   LayoutDashboard,
   KeyRound,
-  Calendar,
   Bike,
   Activity,
   UserPlus,
@@ -22,7 +21,6 @@ type Unidade = { _id: string; 'Nome Unidade': string }
 const navItems = [
   { href: '/home', label: 'Início', icon: Home },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/agendados', label: 'Agendados', icon: Calendar },
   { href: '/liberacao-cpf', label: 'Liberação de Veículos', icon: KeyRound },
   { href: '/recebimento', label: 'Recebimento de Motos', icon: Bike },
   { href: '/movimentacao', label: 'Funções', icon: Activity },
