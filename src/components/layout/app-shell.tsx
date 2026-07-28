@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, LayoutDashboard, Bike, Activity, LogOut, UserPlus, ChevronDown, Check, Building2, KeyRound } from 'lucide-react'
+import { Home, LayoutDashboard, Bike, Activity, LogOut, ChevronDown, Check, Building2, KeyRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sidebar } from './sidebar'
 import { setUnidadeAtiva } from '@/lib/unidade-ativa'
@@ -17,8 +17,6 @@ const navItems = [
   { href: '/movimentacao', label: 'Funções', labelMobile: 'Funções', icon: Activity },
 ]
 
-const navAdmin = { href: '/cadastro', label: 'Cadastro', labelMobile: 'Cadastro', icon: UserPlus }
-
 type Plataforma = 'ios' | 'android' | 'outro'
 
 function detectarPlataforma(): Plataforma {
@@ -29,10 +27,10 @@ function detectarPlataforma(): Plataforma {
   return 'outro'
 }
 
-function MobileNavBar({ plataforma, isAdmin }: { plataforma: Plataforma; isAdmin: boolean }) {
+function MobileNavBar({ plataforma }: { plataforma: Plataforma }) {
   const pathname = usePathname()
   const router = useRouter()
-  const items = isAdmin ? [...navItems, navAdmin] : navItems
+  const items = navItems
 
   return (
     <nav className={cn(
@@ -229,7 +227,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {plataforma === 'ios' && (
           <>
             <MobileHeader {...headerProps} />
-            <MobileNavBar plataforma="ios" isAdmin={isAdmin} />
+            <MobileNavBar plataforma="ios" />
           </>
         )}
 
@@ -248,7 +246,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Android: nav em baixo */}
         {plataforma === 'android' && (
-          <MobileNavBar plataforma="android" isAdmin={isAdmin} />
+          <MobileNavBar plataforma="android" />
         )}
       </div>
     </div>

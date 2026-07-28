@@ -9,7 +9,6 @@ import {
   KeyRound,
   Bike,
   Activity,
-  UserPlus,
   X,
   LogOut,
 } from 'lucide-react'
@@ -24,10 +23,6 @@ const navItems = [
   { href: '/liberacao-cpf', label: 'Liberação de Veículos', icon: KeyRound },
   { href: '/recebimento', label: 'Recebimento de Motos', icon: Bike },
   { href: '/movimentacao', label: 'Funções', icon: Activity },
-]
-
-const navAdmin = [
-  { href: '/cadastro', label: 'Cadastro de Usuário', icon: UserPlus },
 ]
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -111,28 +106,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             {label}
           </Link>
         ))}
-
-        {isAdmin && (
-          <div className="pt-4">
-            <p className="px-3 pb-2 text-[10px] text-[#4A5078] uppercase tracking-widest font-semibold">Admin</p>
-            {navAdmin.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={onClose}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
-                  pathname === href
-                    ? 'bg-[#6C63FF] text-white shadow-[0_4px_12px_rgba(108,99,255,0.35)]'
-                    : 'text-[#8E92B3] hover:bg-[#262B59] hover:text-slate-100'
-                )}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                {label}
-              </Link>
-            ))}
-          </div>
-        )}
       </nav>
 
       <div className="px-4 py-4 border-t border-[#2A2F5B] space-y-3">
