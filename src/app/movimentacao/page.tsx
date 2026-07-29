@@ -296,7 +296,7 @@ export default function MovimentacaoPage() {
     try {
       const veiculoId = (veiculoFuncoes as { _id?: string } | null)?._id ?? ''
       const fotoUrl = foto ? await uploadArquivo(foto) : ''
-      await chamarBubble('registrar-solicitacao-base', {
+      const data = await chamarBubble('registrar-solicitacao-base', {
         data: String(Date.now()),
         veiculo: veiculoId,
         descricao,
@@ -304,6 +304,13 @@ export default function MovimentacaoPage() {
         motivo,
         ...(fotoUrl ? { foto: fotoUrl } : {}),
       })
+
+      const mensagemBloqueio = data?.response?.MENSAGEM ?? data?.MENSAGEM
+      if (mensagemBloqueio) {
+        setErroSolicitacao(String(mensagemBloqueio))
+        setEnviandoSolicitacao(false)
+        return
+      }
 
       setSolicitacaoSucesso(true)
       setTimeout(() => {
