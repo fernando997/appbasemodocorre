@@ -5,8 +5,20 @@ import { useSearchParams } from 'next/navigation'
 import { Camera, Video, Gauge, MapPin, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Loader2, XCircle, ImageIcon, UserCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { BUBBLE_BASE as API_BASE, BUBBLE_KEY as API_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
 import { gerarPdfVistoriaEntrega } from '@/lib/gerar-pdf-vistoria'
+
+// Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function chamarBubble(endpoint: string, body: Record<string, unknown>, format?: 'json' | 'form'): Promise<any> {
+  const res = await fetch('/api/bubble', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, body, format }),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${text}`)
+  try { return JSON.parse(text) } catch { return text }
+}
 
 // Remove campos com string vazia antes de mandar pro Bubble (senão preenche com null lá)
 function omitirVazios<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -135,7 +147,6 @@ function VistoriaEntregaContent() {
   // Etapa 0 - Selfie
   const [selfie, setSelfie] = useState<string | null>(null)
   const selfieRef = useRef<HTMLInputElement>(null)
-  const selfieUploadRef = useRef<HTMLInputElement>(null)
 
   // Validacao facial
   const [validandoFacial, setValidandoFacial] = useState(false)
@@ -173,19 +184,7 @@ function VistoriaEntregaContent() {
   useEffect(() => {
     if (!placaContrato || !contrato) { setBuscandoCnh(false); return }
     setBuscandoCnh(true)
-    const form = new URLSearchParams()
-    form.append('apikey', API_KEY)
-    form.append('placa', placaContrato.trim().toUpperCase())
-    form.append('contrato', contrato)
-    fetch(`${API_BASE}/vistoria-entrega-sub`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: form.toString(),
-    })
-      .then(r => r.json())
+    chamarBubble('vistoria-entrega-sub', { placa: placaContrato.trim().toUpperCase(), contrato })
       .then(data => {
         const cliente = data.response?.cliente
         if (cliente?.foto_cnh) {
@@ -201,15 +200,7 @@ function VistoriaEntregaContent() {
   useEffect(() => {
     if (!placa) return
     setCarregandoVeiculo(true)
-    const form = new FormData()
-    form.append('apikey', API_KEY)
-    form.append('placa', placa.trim().toUpperCase())
-    fetch(`${API_BASE}/consulta-veiculo-funcoes`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-      body: form,
-    })
-      .then(r => r.json())
+    chamarBubble('consulta-veiculo-funcoes', { placa: placa.trim().toUpperCase() })
       .then(data => {
         const kmVal = data.response?.veiculo?.km
         if (kmVal != null) setVeiculoKm(Number(kmVal))
@@ -405,22 +396,14 @@ function VistoriaEntregaContent() {
 
       // Registra/verifica quem já terminou a vistoria de substituição — a moto
       // antiga pode ser finalizada pelo usuário (outra tela) antes ou depois desta
-      const registroForm = new FormData()
-      registroForm.append('apikey', API_KEY)
-      registroForm.append('contrato', contratoId ?? '')
-      registroForm.append('placa-nova', placa!.trim().toUpperCase())
-      registroForm.append('placa-antiga', (placaContrato ?? '').trim().toUpperCase())
-
-      const registroRes = await fetch(`${API_BASE}/base-registro-vistoria-substituicao`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-        body: registroForm,
-      })
-      const registro = await registroRes.json().catch(() => null)
+      const registro = await chamarBubble('base-registro-vistoria-substituicao', {
+        contrato: contratoId ?? '',
+        'placa-nova': placa!.trim().toUpperCase(),
+        'placa-antiga': (placaContrato ?? '').trim().toUpperCase(),
+      }).catch(() => null)
       const registroTexto = extrairMensagemRegistro(registro)
 
       const body = omitirVazios({
-        apikey: API_KEY,
         PLACA_ANTIGA: (placaContrato ?? '').trim().toUpperCase(),
         KM_ANTIGA: '',
         PDF_ANTIGA: '',
@@ -436,19 +419,7 @@ function VistoriaEntregaContent() {
         ONDE: 'MOTO-NOVA',
       })
 
-      const res = await fetch(`${API_BASE}/base_vistoria_nova_sub`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const erroTexto = await res.text().catch(() => '')
-        console.error('[vistoria-entrega-sub] erro do Bubble:', erroTexto)
-        throw new Error(`Envio da vistoria falhou: HTTP ${res.status} — ${erroTexto}`)
-      }
+      await chamarBubble('base_vistoria_nova_sub', body, 'json')
 
       mudarEtapa(7)
     } catch (err) {
@@ -634,29 +605,19 @@ function VistoriaEntregaContent() {
                 </div>
               )}
               {!validandoFacial && (
-                <div className="flex gap-3">
-                  <Button
-                    onClick={() => selfieRef.current?.click()}
-                    className={
-                      selfie
-                        ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]'
-                        : 'bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]'
-                    }
-                  >
-                    <Camera className="w-4 h-4 mr-2" />
-                    {selfie ? 'Tirar novamente' : 'Abrir Camera'}
-                  </Button>
-                  <Button
-                    onClick={() => selfieUploadRef.current?.click()}
-                    className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
-                  >
-                    <ImageIcon className="w-4 h-4 mr-2" />
-                    Enviar Foto
-                  </Button>
-                </div>
+                <Button
+                  onClick={() => selfieRef.current?.click()}
+                  className={
+                    selfie
+                      ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]'
+                      : 'bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]'
+                  }
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  {selfie ? 'Tirar novamente' : 'Abrir Camera'}
+                </Button>
               )}
               <input ref={selfieRef} type="file" accept="image/*" capture="user" className="hidden" onChange={(e) => { setFacialStatus('idle'); setFacialErro(''); onSelfie(e) }} />
-              <input ref={selfieUploadRef} type="file" accept="image/*" className="hidden" onChange={(e) => { setFacialStatus('idle'); setFacialErro(''); onSelfie(e) }} />
               {facialStatus === 'reprovado' && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
                   <p className="text-sm text-red-300 text-center">{facialErro}</p>

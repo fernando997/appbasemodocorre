@@ -3,8 +3,17 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { PageHeader } from '@/components/layout/page-header'
-import { BUBBLE_BASE, BUBBLE_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function chamarBubble(endpoint: string, body: Record<string, unknown>): Promise<any> {
+  const res = await fetch('/api/bubble', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, body }),
+  })
+  return res.json()
+}
 
 const StatusFrota = dynamic(
   () => import('@/components/dashboard/status-frota').then((m) => m.StatusFrota),
@@ -53,17 +62,11 @@ export default function DashboardPage() {
 
         while (true) {
           const maximo = minimo + TAMANHO - 1
-          const form = new FormData()
-          form.append('apikey', BUBBLE_KEY)
-          form.append('unidade', JSON.stringify(ids))
-          form.append('minimo', String(minimo))
-          form.append('maximo', String(maximo))
-          const res = await fetch(`${BUBBLE_BASE}/chamar-veiculos`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-            body: form,
+          const data = await chamarBubble('chamar-veiculos', {
+            unidade: JSON.stringify(ids),
+            minimo: String(minimo),
+            maximo: String(maximo),
           })
-          const data = await res.json()
           const batch: Veiculo[] = data?.response?.veiculos ?? []
           if (batch.length === 0) break
           for (const v of batch) {
@@ -102,17 +105,11 @@ export default function DashboardPage() {
 
         while (true) {
           const maximo = minimo + TAMANHO - 1
-          const form = new FormData()
-          form.append('apikey', BUBBLE_KEY)
-          form.append('unidade', JSON.stringify(ids))
-          form.append('minimo', String(minimo))
-          form.append('maximo', String(maximo))
-          const res = await fetch(`${BUBBLE_BASE}/chamar-recolhas-pendencias`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-            body: form,
+          const data = await chamarBubble('chamar-recolhas-pendencias', {
+            unidade: JSON.stringify(ids),
+            minimo: String(minimo),
+            maximo: String(maximo),
           })
-          const data = await res.json()
           const batchR: { _id?: string }[] = data?.response?.recolha ?? []
           const batchP: { _id?: string }[] = data?.response?.pendencias ?? []
 

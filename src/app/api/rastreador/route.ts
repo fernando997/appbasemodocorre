@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { BUBBLE_BASE, BUBBLE_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
 
 const MODOTRACK_URL = 'https://app.modotrack.com.br/api/v1/fleet/position-snapshot'
 
@@ -19,9 +20,6 @@ export async function POST(req: NextRequest) {
     const placaFmt = String(placa).trim().toUpperCase()
 
     // 1ª plataforma: ModoTrack
-    console.log(`[rastreador] curl '${MODOTRACK_URL}/${placaFmt}' \\
-  -H 'accept: application/json' \\
-  -H 'X-API-Key: ${process.env.MODOTRACK_KEY}'`)
     try {
       const res = await fetch(`${MODOTRACK_URL}/${placaFmt}`, {
         headers: {
@@ -47,16 +45,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 2ª plataforma: Bubble teste-rastreadores
-    console.log(`[rastreador] curl -X POST '${process.env.NEXT_PUBLIC_BUBBLE_BASE}/teste-rastreadores' \\
-  -H 'Authorization: Bearer ${process.env.NEXT_PUBLIC_BUBBLE_PRIVATE_KEY}' \\
-  -F 'apikey=${process.env.NEXT_PUBLIC_BUBBLE_KEY}' \\
-  -F 'placa=${placaFmt}'`)
     const form = new FormData()
-    form.append('apikey', process.env.NEXT_PUBLIC_BUBBLE_KEY!)
+    form.append('apikey', BUBBLE_KEY)
     form.append('placa', placaFmt)
-    const res2 = await fetch(`${process.env.NEXT_PUBLIC_BUBBLE_BASE}/teste-rastreadores`, {
+    const res2 = await fetch(`${BUBBLE_BASE}/teste-rastreadores`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_BUBBLE_PRIVATE_KEY}` },
+      headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
       body: form,
     })
     if (res2.ok) {

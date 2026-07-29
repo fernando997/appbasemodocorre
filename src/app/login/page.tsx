@@ -10,6 +10,57 @@ function gerarCodigo(): string {
   return String(Math.floor(100000 + Math.random() * 900000))
 }
 
+// Bloqueio de tentativas de login por telefone (armazenado no navegador)
+const MAX_TENTATIVAS = 5
+const BLOQUEIO_MS = 60 * 60 * 1000 // 1 hora
+
+type TentativasEntry = { count: number; blockedUntil: number | null }
+
+function getTentativas(telefone: string): TentativasEntry {
+  try {
+    const todas = JSON.parse(localStorage.getItem('mc_login_attempts') ?? '{}')
+    return todas[telefone] ?? { count: 0, blockedUntil: null }
+  } catch {
+    return { count: 0, blockedUntil: null }
+  }
+}
+
+function salvarTentativas(telefone: string, entry: TentativasEntry) {
+  try {
+    const todas = JSON.parse(localStorage.getItem('mc_login_attempts') ?? '{}')
+    todas[telefone] = entry
+    localStorage.setItem('mc_login_attempts', JSON.stringify(todas))
+  } catch {}
+}
+
+function limparTentativas(telefone: string) {
+  try {
+    const todas = JSON.parse(localStorage.getItem('mc_login_attempts') ?? '{}')
+    delete todas[telefone]
+    localStorage.setItem('mc_login_attempts', JSON.stringify(todas))
+  } catch {}
+}
+
+function registrarFalha(telefone: string) {
+  const atual = getTentativas(telefone)
+  const novoCount = atual.count + 1
+  if (novoCount >= MAX_TENTATIVAS) {
+    salvarTentativas(telefone, { count: 0, blockedUntil: Date.now() + BLOQUEIO_MS })
+  } else {
+    salvarTentativas(telefone, { count: novoCount, blockedUntil: null })
+  }
+}
+
+// Retorna mensagem de bloqueio se o telefone estiver bloqueado, ou null caso contrário
+function checarBloqueio(telefone: string): string | null {
+  const tentativas = getTentativas(telefone)
+  if (tentativas.blockedUntil && tentativas.blockedUntil > Date.now()) {
+    const minutos = Math.ceil((tentativas.blockedUntil - Date.now()) / 60000)
+    return `Muitas tentativas incorretas. Tente novamente em ${minutos} minuto${minutos !== 1 ? 's' : ''}.`
+  }
+  return null
+}
+
 export default function LoginPage() {
   const router = useRouter()
 
@@ -23,6 +74,9 @@ export default function LoginPage() {
   async function handleEnviarCodigo(e: React.FormEvent) {
     e.preventDefault()
     if (telefone.length < 10) return
+
+    const bloqueio = checarBloqueio(telefone)
+    if (bloqueio) { setErro(bloqueio); return }
 
     setCarregando(true)
     setErro(null)
@@ -55,8 +109,13 @@ export default function LoginPage() {
     e.preventDefault()
     if (codigo.length < 6) return
 
+    const bloqueio = checarBloqueio(telefone)
+    if (bloqueio) { setErro(bloqueio); return }
+
     if (codigo !== codigoGerado) {
-      setErro('Código incorreto. Tente novamente.')
+      registrarFalha(telefone)
+      const bloqueioNovo = checarBloqueio(telefone)
+      setErro(bloqueioNovo ?? 'Código incorreto. Tente novamente.')
       return
     }
 
@@ -76,6 +135,8 @@ export default function LoginPage() {
 
       if (data.status !== 'success') throw new Error()
 
+      limparTentativas(telefone)
+
       const maxAge = 'max-age=86400'
       document.cookie = `mc_auth=1; path=/; SameSite=Lax; ${maxAge}`
       document.cookie = `mc_unit=${encodeURIComponent(JSON.stringify(data.response?.user?.Unidade ?? []))}; path=/; SameSite=Lax; ${maxAge}`
@@ -88,7 +149,9 @@ export default function LoginPage() {
 
       router.push('/home')
     } catch {
-      setErro('Código inválido ou expirado. Tente novamente.')
+      registrarFalha(telefone)
+      const bloqueioNovo = checarBloqueio(telefone)
+      setErro(bloqueioNovo ?? 'Código inválido ou expirado. Tente novamente.')
       setCarregando(false)
     }
   }

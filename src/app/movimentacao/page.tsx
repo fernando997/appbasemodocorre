@@ -5,8 +5,20 @@ import { Camera, Search, X, RotateCcw, LogIn, LogOut, Gauge, Activity, RefreshCw
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { BUBBLE_BASE as API_BASE, BUBBLE_KEY as API_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
 import { gerarPdfVistoria } from '@/lib/gerar-pdf-vistoria'
+
+// Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function chamarBubble(endpoint: string, body: Record<string, unknown>, format?: 'json' | 'form'): Promise<any> {
+  const res = await fetch('/api/bubble', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, body, format }),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${text}`)
+  try { return JSON.parse(text) } catch { return text }
+}
 
 type Movimentacao = Record<string, unknown>
 
@@ -232,7 +244,84 @@ export default function MovimentacaoPage() {
   const [consultando, setConsultando] = useState(false)
   const [resultado, setResultado] = useState<Movimentacao[] | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const [acao, setAcao] = useState<'status' | 'vistorias' | null>(null)
+  const [acao, setAcao] = useState<'status' | 'vistorias' | 'editar-km' | 'editar-status' | null>(null)
+  const [novoKm, setNovoKm] = useState('')
+  const [novoStatus, setNovoStatus] = useState('')
+  const [statusOpcoes, setStatusOpcoes] = useState<string[]>([])
+  const [carregandoStatus, setCarregandoStatus] = useState(false)
+  const [enviandoSolicitacao, setEnviandoSolicitacao] = useState(false)
+  const [solicitacaoSucesso, setSolicitacaoSucesso] = useState(false)
+  const [erroSolicitacao, setErroSolicitacao] = useState('')
+  const [motivoSolicitacao, setMotivoSolicitacao] = useState('')
+  const [fotoPainelKm, setFotoPainelKm] = useState<string | null>(null)
+  const [fotoPainelKmFile, setFotoPainelKmFile] = useState<File | null>(null)
+  const fotoPainelKmRef = useRef<HTMLInputElement>(null)
+
+  function onFotoPainelKm(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFotoPainelKm(URL.createObjectURL(file))
+    setFotoPainelKmFile(file)
+    e.target.value = ''
+  }
+
+  const STATUS_EXCLUIDOS = ['PENDENTE', 'COMPRA RECEBIDA', 'COMPRA EM TRÂNSITO', 'RETORNO DE LOCAÇÃO', 'LOCADO', 'DISPONIVEL']
+
+  async function buscarStatusVeiculo() {
+    setCarregandoStatus(true)
+    setStatusOpcoes([])
+    try {
+      const data = await chamarBubble('base-chamar-status', {})
+      const resp = data?.response
+      const lista: Record<string, unknown>[] = Array.isArray(resp)
+        ? resp
+        : (resp && typeof resp === 'object'
+          ? (Object.values(resp).find((v) => Array.isArray(v)) as Record<string, unknown>[] | undefined) ?? []
+          : [])
+      const nomes = lista
+        .map((s) => String(s['descrição'] ?? s['descricao'] ?? ''))
+        .map((d) => d.trim())
+        .filter((d) => d && !STATUS_EXCLUIDOS.includes(d.toUpperCase()))
+      setStatusOpcoes([...new Set(nomes)])
+    } catch {
+      setStatusOpcoes([])
+    } finally {
+      setCarregandoStatus(false)
+    }
+  }
+
+  async function enviarSolicitacaoBase(descricao: string, tipo: 'ALTERAÇÃO KM' | 'ALTERAÇÃO STATUS', motivo: string, foto?: File | null) {
+    setEnviandoSolicitacao(true)
+    setErroSolicitacao('')
+    try {
+      const veiculoId = (veiculoFuncoes as { _id?: string } | null)?._id ?? ''
+      const fotoUrl = foto ? await uploadArquivo(foto) : ''
+      await chamarBubble('registrar-solicitacao-base', {
+        data: String(Date.now()),
+        veiculo: veiculoId,
+        descricao,
+        tipo,
+        motivo,
+        ...(fotoUrl ? { foto: fotoUrl } : {}),
+      })
+
+      setSolicitacaoSucesso(true)
+      setTimeout(() => {
+        setSolicitacaoSucesso(false)
+        setAcao(null)
+        setNovoKm('')
+        setNovoStatus('')
+        setFotoPainelKm(null)
+        setFotoPainelKmFile(null)
+        setMotivoSolicitacao('')
+        setEnviandoSolicitacao(false)
+      }, 2500)
+    } catch (err) {
+      setErroSolicitacao(`Erro ao enviar solicitação: ${String(err)}`)
+      setEnviandoSolicitacao(false)
+    }
+  }
+
   const [veiculoFuncoes, setVeiculoFuncoes] = useState<Record<string, unknown> | null>(null)
   const [vistoriasDisponiveis, setVistoriasDisponiveis] = useState<string[]>([])
   const [vistoriasIncluir, setVistoriasIncluir] = useState<Record<string, unknown>[]>([])
@@ -425,15 +514,7 @@ export default function MovimentacaoPage() {
     setCarregandoNovoSub(true)
     setVeiculoNovoSub(null)
     try {
-      const form = new FormData()
-      form.append('apikey', API_KEY)
-      form.append('placa', placaEscolhida.trim().toUpperCase())
-      const res = await fetch(`${API_BASE}/consulta-veiculo-funcoes`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-        body: form,
-      })
-      const data = await res.json()
+      const data = await chamarBubble('consulta-veiculo-funcoes', { placa: placaEscolhida.trim().toUpperCase() })
       const veiculo = data.response?.veiculo ?? null
       setVeiculoNovoSub(veiculo)
       // Moto apta → testa os rastreadores automaticamente
@@ -482,23 +563,11 @@ export default function MovimentacaoPage() {
   // pode ser finalizada pelo cliente (link) antes ou depois da moto antiga aqui
   async function registrarVistoriaSubstituicao(contratoId: string, placaNova: string, placaAntiga: string, modo: 'INCLUIR' | 'RETIRAR'): Promise<unknown> {
     const endpoint = modo === 'RETIRAR' ? 'base-registro-vistoria-retirar' : 'base-registro-vistoria-substituicao'
-    const form = new FormData()
-    form.append('apikey', API_KEY)
-    form.append('contrato', contratoId)
-    form.append('placa-nova', placaNova)
-    form.append('placa-antiga', placaAntiga)
-
-    const res = await fetch(`${API_BASE}/${endpoint}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-      body: form,
+    return chamarBubble(endpoint, {
+      contrato: contratoId,
+      'placa-nova': placaNova,
+      'placa-antiga': placaAntiga,
     })
-    if (!res.ok) {
-      const erroTexto = await res.text().catch(() => '')
-      console.error('[registro-substituicao] erro do Bubble:', erroTexto)
-      throw new Error(`Registro de substituição falhou: HTTP ${res.status} — ${erroTexto}`)
-    }
-    return res.json()
   }
 
   async function enviarVistoriaDevolucao() {
@@ -547,7 +616,6 @@ export default function MovimentacaoPage() {
 
       const sn = (...vals: (boolean | null)[]) => vals.some(v => v === true) ? 'SIM' : 'NÃO'
       const body = {
-        apikey: API_KEY,
         PLACA: placa.trim().toUpperCase(),
         KM: kmDevolucao,
         PDF: pdfUrl,
@@ -561,19 +629,7 @@ export default function MovimentacaoPage() {
         ESCAPAMENTO: sn(perguntasDevolucao.fumandoEscapamento, perguntasDevolucao.canoAdulterado),
       }
 
-      const res = await fetch(`${API_BASE}/vistoria_devolucao`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const erroTexto = await res.text().catch(() => '')
-        console.error('[devolucao] erro do Bubble:', erroTexto)
-        throw new Error(`Envio da vistoria falhou: HTTP ${res.status} — ${erroTexto}`)
-      }
+      await chamarBubble('vistoria_devolucao', body, 'json')
 
       setEtapaEnvio('concluido')
       setVistoriaSucesso(true)
@@ -644,7 +700,6 @@ export default function MovimentacaoPage() {
       setEtapaEnvio('vistoria')
 
       const body = omitirVazios({
-        apikey: API_KEY,
         PLACA_ANTIGA: placa.trim().toUpperCase(),
         KM_ANTIGA: kmDevolucao,
         PDF_ANTIGA: pdfAntigaUrl,
@@ -662,19 +717,7 @@ export default function MovimentacaoPage() {
 
       const endpointFinal = modo === 'RETIRAR' ? 'base-vitoria-sub-retirar' : 'base_vistoria_nova_sub'
 
-      const res = await fetch(`${API_BASE}/${endpointFinal}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const erroTexto = await res.text().catch(() => '')
-        console.error('[substituicao] erro do Bubble:', erroTexto)
-        throw new Error(`Envio da vistoria falhou: HTTP ${res.status} — ${erroTexto}`)
-      }
+      await chamarBubble(endpointFinal, body, 'json')
 
       setEtapaEnvio('concluido')
       setVistoriaSucesso(true)
@@ -729,23 +772,14 @@ export default function MovimentacaoPage() {
       const videoUrl = uploadData.url as string
 
       const body = {
-        apikey: API_KEY,
         placa: placa.trim().toUpperCase(),
         km: kmDisponibilidade,
         nivel_comb: combustivelDisponibilidade,
         video: videoUrl,
       }
 
-      const res = await fetch(`${API_BASE}/base_vistoria_disponibilidade`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
+      await chamarBubble('base_vistoria_disponibilidade', body, 'json')
 
-      if (!res.ok) throw new Error(`Vistoria falhou: HTTP ${res.status}`)
       setEtapaEnvio('concluido')
       setVistoriaSucesso(true)
 
@@ -842,17 +876,7 @@ export default function MovimentacaoPage() {
     setVeiculoFuncoes(null)
     setVistoriasDisponiveis([])
     try {
-      const form = new FormData()
-      form.append('apikey', API_KEY)
-      form.append('placa', placaValue.trim().toUpperCase())
-      const res = await fetch(`${API_BASE}/consulta-veiculo-funcoes`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-        body: form,
-      })
-      const text = await res.text()
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = JSON.parse(text)
+      const data = await chamarBubble('consulta-veiculo-funcoes', { placa: placaValue.trim().toUpperCase() })
       const vistoriasRaw: Record<string, unknown>[] = data.response?.vistorias ?? []
       setVeiculoFuncoes(data.response?.veiculo ? { ...data.response.veiculo, contrato: data.response.contrato } : null)
       setVistoriasDisponiveis(vistoriasRaw.map((v) => v.nome as string))
@@ -871,18 +895,7 @@ export default function MovimentacaoPage() {
     setErro(null)
     setResultado(null)
     try {
-      const form = new FormData()
-      form.append('apikey', API_KEY)
-      form.append('placa', placa.trim().toUpperCase())
-      const endpoint = `${API_BASE}/status-de-movimentação`
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-        body: form,
-      })
-      const text = await res.text()
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = JSON.parse(text)
+      const data = await chamarBubble('status-de-movimentação', { placa: placa.trim().toUpperCase() })
       const statusmoviRaw: Movimentacao[] = data.response?.statusmovi ?? []
       const contratoRaw: Movimentacao[] = data.response?.contrato ?? []
       const statusMap = Object.fromEntries(statusmoviRaw.map((s) => [s._id as string, s]))
@@ -1136,7 +1149,174 @@ export default function MovimentacaoPage() {
                   <span className="text-[10px] text-muted-foreground">Realizar vistoria</span>
                 </div>
               </button>
+              <button
+                onClick={() => { setNovoKm(''); setFotoPainelKm(null); setFotoPainelKmFile(null); setMotivoSolicitacao(''); setErroSolicitacao(''); setAcao('editar-km') }}
+                className="flex flex-col items-center gap-2 bg-white border rounded-xl px-4 py-4 shadow-sm hover:shadow-md hover:border-orange-300 transition-all"
+              >
+                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Gauge className="w-5 h-5 text-orange-600" />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-medium block">Mudar KM</span>
+                  <span className="text-[10px] text-muted-foreground">Alterar quilometragem</span>
+                </div>
+              </button>
+              <button
+                onClick={() => { setNovoStatus(''); setMotivoSolicitacao(''); setErroSolicitacao(''); setAcao('editar-status'); buscarStatusVeiculo() }}
+                className="flex flex-col items-center gap-2 bg-white border rounded-xl px-4 py-4 shadow-sm hover:shadow-md hover:border-purple-300 transition-all"
+              >
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                  <RefreshCw className="w-5 h-5 text-purple-600" />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-medium block">Mudar Status</span>
+                  <span className="text-[10px] text-muted-foreground">Alterar status da moto</span>
+                </div>
+              </button>
             </div>
+          </div>
+        )}
+
+        {!analisando && placa && acao === 'editar-km' && (
+          <div className="space-y-3">
+            {solicitacaoSucesso ? (
+              <div className="text-center py-8 space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto" />
+                <p className="text-sm font-medium">Solicitação enviada!</p>
+              </div>
+            ) : (
+              <>
+                <input ref={fotoPainelKmRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFotoPainelKm} />
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Foto do painel (mostrando o KM real)</label>
+                  {fotoPainelKm ? (
+                    <div className="relative">
+                      <img src={fotoPainelKm} alt="Painel da moto" className="w-full h-44 object-cover rounded-xl border" />
+                      <button
+                        onClick={() => { setFotoPainelKm(null); setFotoPainelKmFile(null) }}
+                        className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => fotoPainelKmRef.current?.click()} className="w-full h-44 border-2 border-dashed border-zinc-300 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground hover:border-orange-400 hover:text-orange-500 transition-colors">
+                      <div className="w-14 h-14 rounded-full bg-orange-50 flex items-center justify-center">
+                        <Camera className="w-7 h-7 text-orange-400" />
+                      </div>
+                      <span className="text-sm font-medium">Fotografar painel da moto</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Novo KM</label>
+                  <div className="relative">
+                    <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="number"
+                      value={novoKm}
+                      onChange={(e) => setNovoKm(e.target.value)}
+                      placeholder={veiculoFuncoes?.km != null ? `Atual: ${veiculoFuncoes.km}` : 'Ex: 15230'}
+                      className="w-full pl-9 pr-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Motivo</label>
+                  <textarea
+                    value={motivoSolicitacao}
+                    onChange={(e) => setMotivoSolicitacao(e.target.value)}
+                    placeholder="Descreva o motivo da alteração de KM..."
+                    rows={3}
+                    className="w-full px-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
+                  />
+                </div>
+                {erroSolicitacao && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">{erroSolicitacao}</div>
+                )}
+                <Button
+                  className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
+                  disabled={!fotoPainelKmFile || !novoKm.trim() || !motivoSolicitacao.trim() || enviandoSolicitacao}
+                  onClick={() => enviarSolicitacaoBase(novoKm.trim(), 'ALTERAÇÃO KM', motivoSolicitacao.trim(), fotoPainelKmFile)}
+                >
+                  {enviandoSolicitacao ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Confirmar
+                </Button>
+                <button onClick={() => setAcao(null)} className="text-xs text-muted-foreground hover:text-foreground underline">
+                  Escolher outra opção
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {!analisando && placa && acao === 'editar-status' && (
+          <div className="space-y-3">
+            {solicitacaoSucesso ? (
+              <div className="text-center py-8 space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto" />
+                <p className="text-sm font-medium">Solicitação enviada!</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Novo status</label>
+                    {veiculoFuncoes?.status_veiculo_desc != null && (
+                      <span className="text-xs text-muted-foreground">Atual: {String(veiculoFuncoes.status_veiculo_desc)}</span>
+                    )}
+                  </div>
+
+                  {carregandoStatus ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-6">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Carregando status disponíveis...
+                    </div>
+                  ) : statusOpcoes.length === 0 ? (
+                    <div className="text-center py-6 text-sm text-muted-foreground border border-dashed rounded-lg">
+                      Nenhum status disponível.
+                    </div>
+                  ) : (
+                    <select
+                      value={novoStatus}
+                      onChange={(e) => setNovoStatus(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                    >
+                      <option value="" disabled>Selecione um status</option>
+                      {statusOpcoes.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Motivo</label>
+                  <textarea
+                    value={motivoSolicitacao}
+                    onChange={(e) => setMotivoSolicitacao(e.target.value)}
+                    placeholder="Descreva o motivo da alteração de status..."
+                    rows={3}
+                    className="w-full px-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-purple-500/30 resize-none"
+                  />
+                </div>
+                {erroSolicitacao && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">{erroSolicitacao}</div>
+                )}
+                <Button
+                  className="w-full gap-2 bg-purple-600 hover:bg-purple-700"
+                  disabled={!novoStatus || !motivoSolicitacao.trim() || enviandoSolicitacao}
+                  onClick={() => enviarSolicitacaoBase(novoStatus, 'ALTERAÇÃO STATUS', motivoSolicitacao.trim())}
+                >
+                  {enviandoSolicitacao ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Confirmar
+                </Button>
+                <button onClick={() => setAcao(null)} className="text-xs text-muted-foreground hover:text-foreground underline">
+                  Escolher outra opção
+                </button>
+              </>
+            )}
           </div>
         )}
 

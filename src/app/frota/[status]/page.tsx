@@ -6,7 +6,16 @@ import { ArrowLeft, Bike } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BUBBLE_BASE, BUBBLE_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function chamarBubble(endpoint: string, body: Record<string, unknown>): Promise<any> {
+  const res = await fetch('/api/bubble', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, body }),
+  })
+  return res.json()
+}
 
 type Veiculo = {
   placa: string
@@ -50,18 +59,8 @@ export default function FrotaStatusPage() {
       const ids = [...new Set(filtrados.map((v) => v.locadora).filter(Boolean))]
       if (ids.length === 0) return
 
-      const form = new FormData()
-      form.append('apikey', BUBBLE_KEY)
-      form.append('locadoras', JSON.stringify(ids))
-
-      fetch(`${BUBBLE_BASE}/chamar-locadoras`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-        body: form,
-      })
-        .then((r) => r.text())
-        .then((text) => {
-          const data = JSON.parse(text)
+      chamarBubble('chamar-locadoras', { locadoras: JSON.stringify(ids) })
+        .then((data) => {
           const lista: Locadora[] = data?.response?.locadoras ?? []
           const map: Record<string, string> = {}
           for (const l of lista) {

@@ -5,8 +5,20 @@ import { useSearchParams } from 'next/navigation'
 import { Camera, Video, Gauge, MapPin, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Loader2, XCircle, ImageIcon, UserCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { BUBBLE_BASE as API_BASE, BUBBLE_KEY as API_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
 import { gerarPdfVistoriaEntrega } from '@/lib/gerar-pdf-vistoria'
+
+// Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function chamarBubble(endpoint: string, body: Record<string, unknown>, format?: 'json' | 'form'): Promise<any> {
+  const res = await fetch('/api/bubble', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, body, format }),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${text}`)
+  try { return JSON.parse(text) } catch { return text }
+}
 
 const FOTOS_ENTREGA = [
   { id: 'frente', label: 'Foto da Frente' },
@@ -143,19 +155,7 @@ function VistoriaEntregaContent() {
   useEffect(() => {
     if (!placa || !contrato) return
     setValidandoContrato(true)
-    const form = new URLSearchParams()
-    form.append('apikey', API_KEY)
-    form.append('placa', placa.trim().toUpperCase())
-    form.append('contrato', contrato)
-    fetch(`${API_BASE}/vistoria-entrega`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: form.toString(),
-    })
-      .then(r => r.json())
+    chamarBubble('vistoria-entrega', { placa: placa.trim().toUpperCase(), contrato })
       .then(data => {
         console.log('[vistoria-entrega] Resposta da API:', data)
         const cliente = data.response?.cliente
@@ -177,15 +177,7 @@ function VistoriaEntregaContent() {
   useEffect(() => {
     if (!placa) return
     setCarregandoVeiculo(true)
-    const form = new FormData()
-    form.append('apikey', API_KEY)
-    form.append('placa', placa.trim().toUpperCase())
-    fetch(`${API_BASE}/consulta-veiculo-funcoes`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-      body: form,
-    })
-      .then(r => r.json())
+    chamarBubble('consulta-veiculo-funcoes', { placa: placa.trim().toUpperCase() })
       .then(data => {
         const kmVal = data.response?.veiculo?.km
         if (kmVal != null) setVeiculoKm(Number(kmVal))
@@ -389,7 +381,6 @@ function VistoriaEntregaContent() {
       const videoUrl = videoAvariasFile ? await uploadArquivo(videoAvariasFile) : ''
 
       const body = {
-        apikey: API_KEY,
         PLACA: placa!.trim().toUpperCase(),
         KM: km,
         TIPO: 'ENTREGA',
@@ -398,15 +389,7 @@ function VistoriaEntregaContent() {
         PDF: pdfUrl,
       }
 
-      const res = await fetch(`${API_BASE}/base_vistoria_disponibilidade`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) throw new Error(`Envio da vistoria falhou: HTTP ${res.status}`)
+      await chamarBubble('base_vistoria_disponibilidade', body, 'json')
 
       mudarEtapa(7)
     } catch (err) {

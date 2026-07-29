@@ -20,8 +20,21 @@ import {
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
-import { BUBBLE_BASE as API_BASE, BUBBLE_KEY as API_KEY, BUBBLE_PRIVATE_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_AUTH_TOKEN } from '@/lib/config'
+import { BUBBLE_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_AUTH_TOKEN } from '@/lib/config'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
+
+// Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function chamarBubble(endpoint: string, body: Record<string, unknown>, format?: 'json' | 'form'): Promise<any> {
+  const res = await fetch('/api/bubble', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, body, format }),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${text}`)
+  try { return JSON.parse(text) } catch { return text }
+}
 
 
 type MotoAPI = {
@@ -80,18 +93,7 @@ export default function RecebimentoPage() {
     setErroApi(null)
     try {
       const unidade = getUnidadesAtivas()
-      const payload = { apikey: API_KEY, unidade }
-
-      const res = await fetch(`${API_BASE}/recebimento-de-motos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      const text = await res.text()
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = JSON.parse(text)
+      const data = await chamarBubble('recebimento-de-motos', { unidade }, 'json')
       if (data.status !== 'success') throw new Error(`status: ${data.status}`)
       const recebimento = data.response.recebimento ?? []
       const locadoras: Record<string, unknown>[] = data.response.locadoras ?? []
@@ -113,15 +115,7 @@ export default function RecebimentoPage() {
     setErroApi(null)
     try {
       const unidade = getUnidadesAtivas()
-      const payload = { apikey: API_KEY, unidade }
-      const res = await fetch(`${API_BASE}/instalacao-motos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const text = await res.text()
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = JSON.parse(text)
+      const data = await chamarBubble('instalacao-motos', { unidade }, 'json')
       if (data.status !== 'success') throw new Error(`status: ${data.status}`)
       const fila1Raw: Record<string, unknown>[] = data.response['instalação 1'] ?? []
       const fila2Raw: Record<string, unknown>[] = data.response['instalação 2'] ?? []
@@ -453,28 +447,22 @@ export default function RecebimentoPage() {
       const fotoUrl = uploadData.url as string
 
       // 2. chamar o workflow com a URL da foto
-      const form = new FormData()
       const veiculo = (dadosMoto as Record<string, unknown>)?.data as Record<string, unknown> | undefined
       const veiculoDados = veiculo?.veiculo as Record<string, unknown> | undefined
 
-      form.append('apikey', API_KEY)
-      form.append('moto', ativa)
-      form.append('placa', placaInput.trim().toUpperCase())
-      form.append('cor', corSelecionada)
-      form.append('foto-entrega', fotoUrl)
-      if (veiculoDados?.marca_modelo) form.append('modelo', String(veiculoDados.marca_modelo))
-      if (veiculoDados?.ano)          form.append('ano-modelo', String(veiculoDados.ano))
-      if (veiculoDados?.uf)           form.append('estado', String(veiculoDados.uf))
-      if (veiculoDados?.municipio)    form.append('cidade', String(veiculoDados.municipio))
-      if (veiculoDados?.combustivel)  form.append('combustivel', String(veiculoDados.combustivel))
+      const receberBody: Record<string, unknown> = {
+        moto: ativa,
+        placa: placaInput.trim().toUpperCase(),
+        cor: corSelecionada,
+        'foto-entrega': fotoUrl,
+      }
+      if (veiculoDados?.marca_modelo) receberBody.modelo = String(veiculoDados.marca_modelo)
+      if (veiculoDados?.ano)          receberBody['ano-modelo'] = String(veiculoDados.ano)
+      if (veiculoDados?.uf)           receberBody.estado = String(veiculoDados.uf)
+      if (veiculoDados?.municipio)    receberBody.cidade = String(veiculoDados.municipio)
+      if (veiculoDados?.combustivel)  receberBody.combustivel = String(veiculoDados.combustivel)
 
-      const res = await fetch(`${API_BASE}/receber-moto`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-        body: form,
-      })
-      const text = await res.text()
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await chamarBubble('receber-moto', receberBody, 'form')
 
       const pagamento = pedidoData?.pagamento as Record<string, unknown>
       if (pagamento?.forma === 'pix_recebimento' && pagamento?.pago === 0) {
@@ -485,7 +473,7 @@ export default function RecebimentoPage() {
             'Content-Type': 'application/json',
             'apikey': SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'x-api-key': API_KEY,
+            'x-api-key': BUBBLE_KEY,
           },
           body: JSON.stringify({ pedido_numero: pedidoData?.numero, chassi: moto?.chassi }),
         })
@@ -509,17 +497,7 @@ export default function RecebimentoPage() {
     if (!ativaInstalacao) return
     setInstalando(true)
     try {
-      const form = new FormData()
-      form.append('apikey', API_KEY)
-      form.append('moto-instacao', ativaInstalacao)
-
-      const res = await fetch(`${API_BASE}/confirmar-instalação`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-        body: form,
-      })
-      const text = await res.text()
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await chamarBubble('confirmar-instalação', { 'moto-instacao': ativaInstalacao }, 'form')
 
       setMotos((prev) => prev.map((m) =>
         m._id === ativaInstalacao

@@ -16,9 +16,19 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { BUBBLE_BASE, BUBBLE_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function chamarBubble(endpoint: string, body: Record<string, unknown>): Promise<any> {
+  const res = await fetch('/api/bubble', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, body }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
 
 const USUARIO_LOGADO = 'Operador Teste'
 
@@ -84,21 +94,7 @@ function obterUsuarioBubble(): string {
 }
 
 async function consultarLiberacao(placa: string, cpf: string): Promise<ResultadoLiberacao> {
-  const form = new FormData()
-  form.append('apikey', BUBBLE_KEY)
-  form.append('placa', placa)
-  form.append('cpf', cpf)
-
-  const endpoint = `${BUBBLE_BASE}/liberacao_veiculo`
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-    body: form,
-  })
-  const text = await res.text()
-
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const data = JSON.parse(text)
+  const data = await chamarBubble('liberacao_veiculo', { placa, cpf })
   const response = data.response ?? data
   return {
     contrato: response.contrato ?? null,
@@ -111,18 +107,7 @@ async function consultarLiberacao(placa: string, cpf: string): Promise<Resultado
 
 async function liberarMoto(contratoId: string): Promise<void> {
   const user = obterUsuarioBubble()
-  const form = new FormData()
-  form.append('apikey', BUBBLE_KEY)
-  form.append('contrato', contratoId)
-  form.append('user', user)
-
-  const endpoint = `${BUBBLE_BASE}/liberar_moto`
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
-    body: form,
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  await chamarBubble('liberar_moto', { contrato: contratoId, user })
 }
 
 function LiberacaoCpfContent() {

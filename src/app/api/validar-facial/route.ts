@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { FACIAL_API_URL, FACIAL_API_KEY } from '@/lib/config'
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData()
@@ -15,11 +16,11 @@ export async function POST(req: NextRequest) {
   body.append('cnh_pdf', '')
   body.append('cnh_imagem', cnhImagem)
 
-  const res = await fetch('http://168.231.89.190:8000/validar-facial', {
+  const res = await fetch(FACIAL_API_URL, {
     method: 'POST',
     headers: {
       'accept': 'application/json',
-      'x-api-key': 'Isg3j7cKe73gD7tMB0RuPhFIJwF8do6LCxGnB7qDeRce1pBl1i',
+      'x-api-key': FACIAL_API_KEY,
     },
     body,
   })
