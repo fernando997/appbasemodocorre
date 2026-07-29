@@ -100,7 +100,7 @@ export default function RecebimentoPage() {
       const fornecedores: Record<string, unknown>[] = data.response.fornecedores ?? []
       const pedidos: Record<string, unknown>[] = data.response.pedido ?? []
       setLocadorasMap(Object.fromEntries(locadoras.map((l) => [l._id as string, l.nome as string])))
-      setFornecedoresMap(Object.fromEntries(fornecedores.map((f) => [f._id as string, f.nome as string])))
+      setFornecedoresMap(Object.fromEntries(fornecedores.map((f) => [f._id as string, f['nome social'] as string])))
       setPedidosMap(Object.fromEntries(pedidos.map((p) => [p._id as string, p.numero as number])))
       setMotos(recebimento)
     } catch {
@@ -154,7 +154,7 @@ export default function RecebimentoPage() {
       const locadoras: Record<string, unknown>[] = data.response.locadoras ?? []
       const fornecedores: Record<string, unknown>[] = data.response.fornecedores ?? []
       setLocadorasMap(Object.fromEntries(locadoras.map((l) => [l._id as string, l.nome as string])))
-      setFornecedoresMap(Object.fromEntries(fornecedores.map((f) => [f._id as string, f.nome as string])))
+      setFornecedoresMap(Object.fromEntries(fornecedores.map((f) => [f._id as string, f['nome social'] as string])))
       setMotos((prev) => [
         ...prev.filter((m) => m.status_veiculo_desc === STATUS_TRANSITO),
         ...(filaMotos as MotoAPI[]),
