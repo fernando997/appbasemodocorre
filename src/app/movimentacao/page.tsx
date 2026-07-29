@@ -5,6 +5,7 @@ import { Camera, Search, X, RotateCcw, LogIn, LogOut, Gauge, Activity, RefreshCw
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { gerarPdfVistoria } from '@/lib/gerar-pdf-vistoria'
 
 // Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
@@ -252,6 +253,7 @@ export default function MovimentacaoPage() {
   const [enviandoSolicitacao, setEnviandoSolicitacao] = useState(false)
   const [solicitacaoSucesso, setSolicitacaoSucesso] = useState(false)
   const [erroSolicitacao, setErroSolicitacao] = useState('')
+  const [mensagemBloqueioSolicitacao, setMensagemBloqueioSolicitacao] = useState('')
   const [motivoSolicitacao, setMotivoSolicitacao] = useState('')
   const [fotoPainelKm, setFotoPainelKm] = useState<string | null>(null)
   const [fotoPainelKmFile, setFotoPainelKmFile] = useState<File | null>(null)
@@ -307,7 +309,7 @@ export default function MovimentacaoPage() {
 
       const mensagemBloqueio = data?.response?.MENSAGEM ?? data?.MENSAGEM
       if (mensagemBloqueio) {
-        setErroSolicitacao(String(mensagemBloqueio))
+        setMensagemBloqueioSolicitacao(String(mensagemBloqueio))
         setEnviandoSolicitacao(false)
         return
       }
@@ -2350,6 +2352,19 @@ export default function MovimentacaoPage() {
         )
       )}
     </div>
+
+    <Dialog open={!!mensagemBloqueioSolicitacao} onOpenChange={(open) => { if (!open) setMensagemBloqueioSolicitacao('') }}>
+      <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            Não é possível registrar
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">{mensagemBloqueioSolicitacao}</p>
+        <Button className="w-full" onClick={() => setMensagemBloqueioSolicitacao('')}>Entendi</Button>
+      </DialogContent>
+    </Dialog>
     </>
   )
 }
