@@ -17,18 +17,19 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/*+json',
       },
       body: JSON.stringify({
+        from: '08000650101',
         body: {
           parameters: {
             CLIENTE: String(cliente ?? ''),
             LINK: String(link),
           },
-          templateId: '84431_vistoriasubbase',
+          templateId: '88b8479c-9652-4373-ab91-afef0ffd4ccc',
         },
-        from: '08000650101',
         to: String(celular),
+        botId: '2292981a-b6be-4782-98ea-e0a205e53bfe',
         options: {
-          forceStartSession: false,
-          enableBot: false,
+          enableBot: true,
+          forceStartSession: true,
         },
       }),
     })
