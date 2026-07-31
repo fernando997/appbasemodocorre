@@ -248,6 +248,7 @@ export default function MovimentacaoPage() {
   const [acao, setAcao] = useState<'status' | 'vistorias' | 'editar-km' | 'editar-status' | null>(null)
   const [novoKm, setNovoKm] = useState('')
   const [novoStatus, setNovoStatus] = useState('')
+  const [kmEditarStatus, setKmEditarStatus] = useState('')
   const [statusOpcoes, setStatusOpcoes] = useState<string[]>([])
   const [carregandoStatus, setCarregandoStatus] = useState(false)
   const [enviandoSolicitacao, setEnviandoSolicitacao] = useState(false)
@@ -257,6 +258,7 @@ export default function MovimentacaoPage() {
   const [motivoSolicitacao, setMotivoSolicitacao] = useState('')
   const [fotoPainelKm, setFotoPainelKm] = useState<string | null>(null)
   const [fotoPainelKmFile, setFotoPainelKmFile] = useState<File | null>(null)
+  const [analisandoKm, setAnalisandoKm] = useState(false)
   const fotoPainelKmRef = useRef<HTMLInputElement>(null)
 
   function onFotoPainelKm(e: React.ChangeEvent<HTMLInputElement>) {
@@ -265,6 +267,41 @@ export default function MovimentacaoPage() {
     setFotoPainelKm(URL.createObjectURL(file))
     setFotoPainelKmFile(file)
     e.target.value = ''
+
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string
+      const img = new Image()
+      img.onload = () => {
+        const MAX = 800
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        const b64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1]
+        analisarKmPainel(b64)
+      }
+      img.src = dataUrl
+    }
+    reader.readAsDataURL(file)
+  }
+
+  async function analisarKmPainel(b64: string) {
+    setAnalisandoKm(true)
+    try {
+      const res = await fetch('/api/ler-km', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: b64 }),
+      })
+      const data = await res.json()
+      if (data.km) setNovoKm(data.km)
+    } catch {
+    } finally {
+      setAnalisandoKm(false)
+    }
   }
 
   const STATUS_EXCLUIDOS = ['PENDENTE', 'COMPRA RECEBIDA', 'COMPRA EM TRÂNSITO', 'RETORNO DE LOCAÇÃO', 'LOCADO', 'DISPONIVEL']
@@ -292,7 +329,7 @@ export default function MovimentacaoPage() {
     }
   }
 
-  async function enviarSolicitacaoBase(descricao: string, tipo: 'ALTERAÇÃO KM' | 'ALTERAÇÃO STATUS', motivo: string, foto?: File | null) {
+  async function enviarSolicitacaoBase(descricao: string, tipo: 'ALTERAÇÃO KM' | 'ALTERAÇÃO STATUS', motivo: string, foto?: File | null, km?: string) {
     setEnviandoSolicitacao(true)
     setErroSolicitacao('')
     try {
@@ -305,6 +342,7 @@ export default function MovimentacaoPage() {
         tipo,
         motivo,
         ...(fotoUrl ? { foto: fotoUrl } : {}),
+        ...(km ? { km } : {}),
       })
 
       const mensagemBloqueio = data?.response?.MENSAGEM ?? data?.MENSAGEM
@@ -320,6 +358,7 @@ export default function MovimentacaoPage() {
         setAcao(null)
         setNovoKm('')
         setNovoStatus('')
+        setKmEditarStatus('')
         setFotoPainelKm(null)
         setFotoPainelKmFile(null)
         setMotivoSolicitacao('')
@@ -332,6 +371,8 @@ export default function MovimentacaoPage() {
   }
 
   const [veiculoFuncoes, setVeiculoFuncoes] = useState<Record<string, unknown> | null>(null)
+  const statusLocado = String(veiculoFuncoes?.status_veiculo_desc ?? '').toUpperCase() === 'LOCADO'
+  const clienteInfo = veiculoFuncoes?.cliente as { nome_completo?: string; celular?: string } | undefined
   const [vistoriasDisponiveis, setVistoriasDisponiveis] = useState<string[]>([])
   const [vistoriasIncluir, setVistoriasIncluir] = useState<Record<string, unknown>[]>([])
   const [vistoriasRetirar, setVistoriasRetirar] = useState<Record<string, unknown>[]>([])
@@ -592,7 +633,7 @@ export default function MovimentacaoPage() {
         placa: placa.trim().toUpperCase(),
         km: kmDevolucao,
         contrato: veiculoFuncoes?.contrato ? String(veiculoFuncoes.contrato) : undefined,
-        cliente: veiculoFuncoes?.cliente ? String(veiculoFuncoes.cliente) : undefined,
+        cliente: clienteInfo?.nome_completo ? String(clienteInfo.nome_completo) : undefined,
         vistoriadorNome: String(user?.Nome ?? user?.nome ?? ''),
         vistoriadorCpf: String(user?.cpf ?? user?.CPF ?? ''),
         vistoriadorWhatsapp: String(user?.celular ?? user?.Celular ?? user?.whatsapp ?? user?.WhatsApp ?? user?.telefone ?? user?.Telefone ?? ''),
@@ -672,7 +713,7 @@ export default function MovimentacaoPage() {
         placa: placa.trim().toUpperCase(),
         km: kmDevolucao,
         contrato: contratoId || undefined,
-        cliente: veiculoFuncoes?.cliente ? String(veiculoFuncoes.cliente) : undefined,
+        cliente: clienteInfo?.nome_completo ? String(clienteInfo.nome_completo) : undefined,
         vistoriadorNome: String(user?.Nome ?? user?.nome ?? ''),
         vistoriadorCpf: String(user?.cpf ?? user?.CPF ?? ''),
         vistoriadorWhatsapp: String(user?.celular ?? user?.Celular ?? user?.whatsapp ?? user?.WhatsApp ?? user?.telefone ?? user?.Telefone ?? ''),
@@ -1171,8 +1212,11 @@ export default function MovimentacaoPage() {
                 </div>
               </button>
               <button
-                onClick={() => { setNovoStatus(''); setMotivoSolicitacao(''); setErroSolicitacao(''); setAcao('editar-status'); buscarStatusVeiculo() }}
-                className="flex flex-col items-center gap-2 bg-white border rounded-xl px-4 py-4 shadow-sm hover:shadow-md hover:border-purple-300 transition-all"
+                onClick={() => { if (!statusLocado) { setNovoStatus(''); setKmEditarStatus(''); setMotivoSolicitacao(''); setErroSolicitacao(''); setAcao('editar-status'); buscarStatusVeiculo() } }}
+                className={`flex flex-col items-center gap-2 bg-white border rounded-xl px-4 py-4 shadow-sm transition-all ${
+                  statusLocado ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md hover:border-purple-300'
+                }`}
+                title={statusLocado ? 'Não é possível alterar o status de uma moto LOCADO' : undefined}
               >
                 <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
                   <RefreshCw className="w-5 h-5 text-purple-600" />
@@ -1227,10 +1271,15 @@ export default function MovimentacaoPage() {
                       type="number"
                       value={novoKm}
                       onChange={(e) => setNovoKm(e.target.value)}
-                      placeholder={veiculoFuncoes?.km != null ? `Atual: ${veiculoFuncoes.km}` : 'Ex: 15230'}
-                      className="w-full pl-9 pr-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                      placeholder={analisandoKm ? 'Lendo KM da foto...' : veiculoFuncoes?.km != null ? `Atual: ${veiculoFuncoes.km}` : 'Ex: 15230'}
+                      disabled={analisandoKm}
+                      className="w-full pl-9 pr-9 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-orange-500/30 disabled:opacity-60"
                     />
+                    {analisandoKm && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-500 animate-spin" />
+                    )}
                   </div>
+                  <p className="text-xs text-muted-foreground">Confira o valor lido pela IA antes de confirmar.</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">Motivo</label>
@@ -1301,6 +1350,23 @@ export default function MovimentacaoPage() {
                   )}
                 </div>
                 <div className="space-y-1.5">
+                  <label className="text-sm font-medium">KM atual da moto</label>
+                  <div className="relative">
+                    <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="number"
+                      value={kmEditarStatus}
+                      onChange={(e) => setKmEditarStatus(e.target.value)}
+                      min={veiculoFuncoes?.km != null ? Number(veiculoFuncoes.km) : undefined}
+                      placeholder={veiculoFuncoes?.km != null ? `Mínimo: ${veiculoFuncoes.km}` : 'Ex: 15230'}
+                      className="w-full pl-9 pr-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                    />
+                  </div>
+                  {veiculoFuncoes?.km != null && kmEditarStatus && Number(kmEditarStatus) < Number(veiculoFuncoes.km) && (
+                    <p className="text-xs text-red-500">KM não pode ser menor que {String(veiculoFuncoes.km)} km (atual)</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium">Motivo</label>
                   <textarea
                     value={motivoSolicitacao}
@@ -1315,8 +1381,8 @@ export default function MovimentacaoPage() {
                 )}
                 <Button
                   className="w-full gap-2 bg-purple-600 hover:bg-purple-700"
-                  disabled={!novoStatus || !motivoSolicitacao.trim() || enviandoSolicitacao}
-                  onClick={() => enviarSolicitacaoBase(novoStatus, 'ALTERAÇÃO STATUS', motivoSolicitacao.trim())}
+                  disabled={!novoStatus || !kmEditarStatus.trim() || !motivoSolicitacao.trim() || enviandoSolicitacao || (veiculoFuncoes?.km != null && Number(kmEditarStatus) < Number(veiculoFuncoes.km))}
+                  onClick={() => enviarSolicitacaoBase(novoStatus, 'ALTERAÇÃO STATUS', motivoSolicitacao.trim(), null, kmEditarStatus.trim())}
                 >
                   {enviandoSolicitacao ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Confirmar
@@ -2269,8 +2335,15 @@ export default function MovimentacaoPage() {
                   const numeroContrato = contratoObj?.['Numero ctr'] ?? ''
                   const contratoId = contratoObj?._id ?? ''
                   const rota = modoSub === 'RETIRAR' ? 'vistoria-entrega-retirada' : 'vistoria-entrega-sub'
-                  setLinkVistoriaSub(`${window.location.origin}/${rota}?placa=${placaNovaSub.trim().toUpperCase()}&contrato=${numeroContrato}&placaContrato=${placa.trim().toUpperCase()}&contratoId=${contratoId}`)
+                  const link = `${window.location.origin}/${rota}?placa=${placaNovaSub.trim().toUpperCase()}&contrato=${numeroContrato}&placaContrato=${placa.trim().toUpperCase()}&contratoId=${contratoId}`
+                  setLinkVistoriaSub(link)
                   setSubFase('antiga')
+                  // TODO: número fixo para teste — trocar para clienteInfo.celular antes de ir pra produção
+                  fetch('/api/enviar-vistoria-whatsapp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cliente: clienteInfo?.nome_completo, celular: '15997847674', link }),
+                  }).catch(() => {})
                 }}
               >
                 Iniciar Vistoria da Moto Antiga <ChevronRight className="w-4 h-4" />

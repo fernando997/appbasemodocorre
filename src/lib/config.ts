@@ -15,3 +15,4 @@ export const FIPE_KEY           = process.env.FIPE_KEY!
 export const FIPE_URL           = process.env.FIPE_URL ?? 'https://placas.fipeapi.com.br/placas'
 export const FACIAL_API_URL      = process.env.FACIAL_API_URL ?? 'http://168.231.89.190:8000/validar-facial'
 export const FACIAL_API_KEY      = process.env.FACIAL_API_KEY!
+export const HELENA_API_KEY      = process.env.HELENA_API_KEY!
