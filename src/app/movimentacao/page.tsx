@@ -415,6 +415,7 @@ export default function MovimentacaoPage() {
   const fotoNovaSubRef = useRef<HTMLInputElement>(null)
   const [testandoRastreador, setTestandoRastreador] = useState(false)
   const [rastreadorInfo, setRastreadorInfo] = useState<{ plataforma: string | null; localizacoes: Record<string, { lat: number | null; long: number | null }> } | null>(null)
+  const [enderecosRastreador, setEnderecosRastreador] = useState<Record<string, string>>({})
   const [linkVistoriaSub, setLinkVistoriaSub] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
   const [veiculoNovoSub, setVeiculoNovoSub] = useState<Record<string, unknown> | null>(null)
@@ -585,6 +586,7 @@ export default function MovimentacaoPage() {
   async function testarRastreador(placaEscolhida: string) {
     setTestandoRastreador(true)
     setRastreadorInfo(null)
+    setEnderecosRastreador({})
     try {
       const res = await fetch('/api/rastreador', {
         method: 'POST',
@@ -593,6 +595,20 @@ export default function MovimentacaoPage() {
       })
       const data = await res.json()
       setRastreadorInfo(data)
+      Object.entries(data?.localizacoes ?? {}).forEach(([nome, loc]) => {
+        const { lat, long } = loc as { lat: number | null; long: number | null }
+        if (lat == null || long == null) return
+        fetch('/api/reverse-geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat, long }),
+        })
+          .then(r => r.json())
+          .then(d => {
+            if (d?.endereco) setEnderecosRastreador(prev => ({ ...prev, [nome]: d.endereco }))
+          })
+          .catch(() => {})
+      })
     } catch {
       setRastreadorInfo({ plataforma: null, localizacoes: {} })
     } finally {
@@ -1434,6 +1450,9 @@ export default function MovimentacaoPage() {
                           setPlacaEsperadaId('')
                         }
                       }
+                      if (tipo === 'DISPONIBILIDADE') {
+                        testarRastreador(placa)
+                      }
                       setTipoSelecionado(tipo)
                     }}
                     className="flex items-center gap-2.5 bg-white border rounded-xl px-3.5 py-4 shadow-sm hover:shadow-md hover:scale-[1.02] hover:border-foreground/20 transition-all text-left"
@@ -1565,13 +1584,60 @@ export default function MovimentacaoPage() {
                 </div>
               </div>
 
+              {/* Teste dos rastreadores */}
+              {testandoRastreador && (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Testando rastreadores...
+                </div>
+              )}
+              {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
+                <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+                  <div className="bg-[#1B2043] px-4 py-2.5 flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-white/70" />
+                    <span className="text-xs font-medium text-white">Rastreadores</span>
+                    <Badge className="ml-auto bg-green-500/20 text-green-300 border-green-400/30 text-xs">OK</Badge>
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => (
+                      <div key={nome} className="flex items-start justify-between gap-3">
+                        <span className="text-xs text-muted-foreground capitalize shrink-0">{nome}</span>
+                        {loc.lat != null && loc.long != null ? (
+                          <div className="text-right">
+                            <a
+                              href={`https://www.google.com/maps?q=${loc.lat},${loc.long}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-mono text-blue-600 underline hover:text-blue-800"
+                            >
+                              {loc.lat.toFixed(6)}, {loc.long.toFixed(6)}
+                            </a>
+                            {enderecosRastreador[nome] && (
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{enderecosRastreador[nome]}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Sem sinal</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a vistoria.</p>
+                </div>
+              )}
+
               {enviandoVistoria || vistoriaSucesso ? (
                 renderProgressoEnvio('blue')
               ) : (
                 <>
                   <Button
                     className="w-full gap-2 bg-blue-600 hover:bg-blue-700 h-12 text-base"
-                    disabled={!kmDisponibilidade.trim() || !combustivelDisponibilidade || !videoDisponibilidadeFile || (veiculoFuncoes?.km != null && Number(kmDisponibilidade) < Number(veiculoFuncoes.km))}
+                    disabled={!kmDisponibilidade.trim() || !combustivelDisponibilidade || !videoDisponibilidadeFile || (veiculoFuncoes?.km != null && Number(kmDisponibilidade) < Number(veiculoFuncoes.km)) || testandoRastreador || !rastreadorInfo?.plataforma}
                     onClick={enviarVistoriaDisponibilidade}
                   >
                     <CheckCircle2 className="w-5 h-5" />
@@ -2300,10 +2366,22 @@ export default function MovimentacaoPage() {
                   </div>
                   <div className="px-4 py-3 space-y-2">
                     {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => (
-                      <div key={nome} className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground capitalize">{nome}</span>
+                      <div key={nome} className="flex items-start justify-between gap-3">
+                        <span className="text-xs text-muted-foreground capitalize shrink-0">{nome}</span>
                         {loc.lat != null && loc.long != null ? (
-                          <span className="text-xs font-mono">{loc.lat.toFixed(6)}, {loc.long.toFixed(6)}</span>
+                          <div className="text-right">
+                            <a
+                              href={`https://www.google.com/maps?q=${loc.lat},${loc.long}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-mono text-blue-600 underline hover:text-blue-800"
+                            >
+                              {loc.lat.toFixed(6)}, {loc.long.toFixed(6)}
+                            </a>
+                            {enderecosRastreador[nome] && (
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{enderecosRastreador[nome]}</p>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">Sem sinal</span>
                         )}
