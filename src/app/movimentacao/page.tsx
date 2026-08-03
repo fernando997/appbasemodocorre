@@ -1187,6 +1187,20 @@ export default function MovimentacaoPage() {
           </div>
         )}
 
+        {!analisando && placa && pendenciasAtivas.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-red-800">Esta moto possui pendência ativa e não pode ser vistoriada</p>
+              {pendenciasAtivas.map((p, i) => (
+                <p key={String(p._id ?? i)} className="text-xs text-red-700">
+                  {String(p['descrição'] ?? p.tipo ?? 'Pendência')}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Seleção de ação - cards com ícone */}
         {!analisando && placa && !acao && (
           <div className="space-y-2">
@@ -1205,11 +1219,15 @@ export default function MovimentacaoPage() {
                 </div>
               </button>
               <button
-                onClick={() => podeVistoria && setAcao('vistorias')}
+                onClick={() => podeVistoria && pendenciasAtivas.length === 0 && setAcao('vistorias')}
                 className={`flex flex-col items-center gap-2 bg-white border rounded-xl px-4 py-4 shadow-sm transition-all ${
-                  podeVistoria ? 'hover:shadow-md hover:border-green-300 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                  podeVistoria && pendenciasAtivas.length === 0 ? 'hover:shadow-md hover:border-green-300 cursor-pointer' : 'opacity-50 cursor-not-allowed'
                 }`}
-                title={podeVistoria ? undefined : 'Seu usuário não tem permissão para realizar vistorias'}
+                title={
+                  pendenciasAtivas.length > 0
+                    ? 'Esta moto possui pendência ativa e não pode ser vistoriada'
+                    : podeVistoria ? undefined : 'Seu usuário não tem permissão para realizar vistorias'
+                }
               >
                 <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
                   <Search className="w-5 h-5 text-green-600" />
