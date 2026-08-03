@@ -179,6 +179,7 @@ export default function RecebimentoPage() {
   const [erroChassi, setErroChassi] = useState<string | null>(null)
   const [corSelecionada, setCorSelecionada] = useState('')
   const [confirmando, setConfirmando] = useState(false)
+  const confirmandoRef = useRef(false)
   const [fotoFile, setFotoFile] = useState<File | null>(null)
   const fotoRef = useRef<HTMLInputElement>(null)
   const fotoFiltroRef = useRef<HTMLInputElement>(null)
@@ -186,6 +187,7 @@ export default function RecebimentoPage() {
   // Dialog — câmera filtro
   const [cameraFiltroAberto, setCameraFiltroAberto] = useState(false)
   const [buscandoPorFoto, setBuscandoPorFoto] = useState(false)
+  const buscandoPorFotoRef = useRef(false)
   const [erroBuscaFoto, setErroBuscaFoto] = useState<string | null>(null)
   const [placaBusca, setPlacaBusca] = useState('')
   const [fotoBusca, setFotoBusca] = useState<string | null>(null)
@@ -198,6 +200,7 @@ export default function RecebimentoPage() {
   // Dialog — Instalação
   const [ativaInstalacao, setAtivaInstalacao] = useState<string | null>(null)
   const [instalando, setInstalando] = useState(false)
+  const instalandoRef = useRef(false)
 
   // Filtro — aba Recebimento
   const [fRec, setFRec] = useState({ status: '', dataInicio: '', dataFim: '' })
@@ -373,6 +376,8 @@ export default function RecebimentoPage() {
 
   async function consultarPlacaBusca(placa: string) {
     if (!placa.trim() || !fotoBusca || !fotoBuscaFile) return
+    if (buscandoPorFotoRef.current) return
+    buscandoPorFotoRef.current = true
     setBuscandoPorFoto(true)
     setErroBuscaFoto(null)
     try {
@@ -392,6 +397,7 @@ export default function RecebimentoPage() {
     } catch {
       setErroBuscaFoto('Erro ao consultar FIPE.')
     } finally {
+      buscandoPorFotoRef.current = false
       setBuscandoPorFoto(false)
     }
   }
@@ -436,6 +442,8 @@ export default function RecebimentoPage() {
   }
   async function confirmarRecebimento() {
     if (!ativa || !foto || !fotoFile || !placaInput.trim() || !corSelecionada) return
+    if (confirmandoRef.current) return
+    confirmandoRef.current = true
     setConfirmando(true)
     try {
       // 1. upload da foto via API route (evita CORS)
@@ -487,6 +495,7 @@ export default function RecebimentoPage() {
       setAtiva(null); setFoto(null); setFotoFile(null); setPlacaInput(''); setCorSelecionada('')
     } catch {
     } finally {
+      confirmandoRef.current = false
       setConfirmando(false)
     }
   }
@@ -495,6 +504,8 @@ export default function RecebimentoPage() {
   function fecharDialogInstalacao() { if (instalando) return; setAtivaInstalacao(null) }
   async function confirmarInstalacao() {
     if (!ativaInstalacao) return
+    if (instalandoRef.current) return
+    instalandoRef.current = true
     setInstalando(true)
     try {
       await chamarBubble('confirmar-instalação', { 'moto-instacao': ativaInstalacao }, 'form')
@@ -507,6 +518,7 @@ export default function RecebimentoPage() {
       setAtivaInstalacao(null)
     } catch {
     } finally {
+      instalandoRef.current = false
       setInstalando(false)
     }
   }

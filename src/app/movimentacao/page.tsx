@@ -373,6 +373,8 @@ export default function MovimentacaoPage() {
   const [veiculoFuncoes, setVeiculoFuncoes] = useState<Record<string, unknown> | null>(null)
   const statusLocado = String(veiculoFuncoes?.status_veiculo_desc ?? '').toUpperCase() === 'LOCADO'
   const clienteInfo = veiculoFuncoes?.cliente as { nome_completo?: string; celular?: string } | undefined
+  const [pendenciasVeiculo, setPendenciasVeiculo] = useState<Record<string, unknown>[]>([])
+  const pendenciasAtivas = pendenciasVeiculo.filter((p) => p.status === 'ATIVO')
   const [vistoriasDisponiveis, setVistoriasDisponiveis] = useState<string[]>([])
   const [vistoriasIncluir, setVistoriasIncluir] = useState<Record<string, unknown>[]>([])
   const [vistoriasRetirar, setVistoriasRetirar] = useState<Record<string, unknown>[]>([])
@@ -941,6 +943,7 @@ export default function MovimentacaoPage() {
     setCarregandoFuncoes(true)
     setVeiculoFuncoes(null)
     setVistoriasDisponiveis([])
+    setPendenciasVeiculo([])
     try {
       const data = await chamarBubble('consulta-veiculo-funcoes', { placa: placaValue.trim().toUpperCase() })
       const vistoriasRaw: Record<string, unknown>[] = data.response?.vistorias ?? []
@@ -948,6 +951,7 @@ export default function MovimentacaoPage() {
       setVistoriasDisponiveis(vistoriasRaw.map((v) => v.nome as string))
       setVistoriasIncluir(data.response?.['vistorias-incluir'] ?? [])
       setVistoriasRetirar(data.response?.['vistorias-retirar'] ?? [])
+      setPendenciasVeiculo(data.response?.pendencia ?? [])
     } catch {
       setErro('Não foi possível consultar as funções disponíveis para esta placa.')
     } finally {
@@ -1490,6 +1494,19 @@ export default function MovimentacaoPage() {
             </div>
 
             <div className="p-5 space-y-5">
+              {pendenciasAtivas.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-red-800">Esta moto possui pendência ativa e não pode ser vistoriada</p>
+                    {pendenciasAtivas.map((p, i) => (
+                      <p key={String(p._id ?? i)} className="text-xs text-red-700">
+                        {String(p['descrição'] ?? p.tipo ?? 'Pendência')}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
               {/* Desktop: duas colunas */}
               <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-5 lg:space-y-0">
                 {/* Coluna esquerda: KM + Combustível */}
@@ -1637,7 +1654,7 @@ export default function MovimentacaoPage() {
                 <>
                   <Button
                     className="w-full gap-2 bg-blue-600 hover:bg-blue-700 h-12 text-base"
-                    disabled={!kmDisponibilidade.trim() || !combustivelDisponibilidade || !videoDisponibilidadeFile || (veiculoFuncoes?.km != null && Number(kmDisponibilidade) < Number(veiculoFuncoes.km)) || testandoRastreador || !rastreadorInfo?.plataforma}
+                    disabled={!kmDisponibilidade.trim() || !combustivelDisponibilidade || !videoDisponibilidadeFile || (veiculoFuncoes?.km != null && Number(kmDisponibilidade) < Number(veiculoFuncoes.km)) || testandoRastreador || !rastreadorInfo?.plataforma || pendenciasAtivas.length > 0}
                     onClick={enviarVistoriaDisponibilidade}
                   >
                     <CheckCircle2 className="w-5 h-5" />

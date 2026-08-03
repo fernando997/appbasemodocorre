@@ -26,9 +26,10 @@ type Props = {
 
 export function PrevisaoRecolhas({ dados, veiculos = [] }: Props) {
   const resp = (dados as { response?: { recolha?: RecolhaItem[] } })?.response
-  const todas: RecolhaItem[] = resp?.recolha ?? []
-
   const veiculoMap = Object.fromEntries(veiculos.map((v) => [v._id, v.placa]))
+
+  // A API não filtra recolhas por unidade — filtra aqui pelas motos da unidade ativa (veiculos já vem filtrado)
+  const todas: RecolhaItem[] = (resp?.recolha ?? []).filter((r) => veiculoMap[r.placa ?? ''] != null)
 
   const autorizadas = todas.filter((r) => r.status !== 'FINALIZADO')
   const recolhidas = todas.filter((r) => r.status === 'FINALIZADO')
