@@ -1144,10 +1144,20 @@ export default function MovimentacaoPage() {
             <input
               value={placa}
               onChange={(e) => setPlaca(e.target.value.toUpperCase())}
+              onKeyDown={(e) => { if (e.key === 'Enter' && placa.trim()) consultarFuncoes(placa) }}
               placeholder={analisando ? 'Analisando...' : 'Ex: ABC1D23'}
               disabled={analisando}
               className="flex-1 px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-blue-600/30 font-mono uppercase"
             />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => placa.trim() && consultarFuncoes(placa)}
+              disabled={analisando || carregandoFuncoes || !placa.trim()}
+              title="Buscar placa"
+            >
+              <Search className="w-4 h-4" />
+            </Button>
             {foto && (
               <Button
                 variant="outline"
@@ -1202,7 +1212,7 @@ export default function MovimentacaoPage() {
         )}
 
         {/* Seleção de ação - cards com ícone */}
-        {!analisando && placa && !acao && (
+        {!analisando && placa && veiculoFuncoes && !acao && (
           <div className="space-y-2">
             <p className="text-sm font-medium">O que deseja fazer?</p>
             <div className="grid grid-cols-2 gap-3">

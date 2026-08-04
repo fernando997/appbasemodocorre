@@ -9,6 +9,7 @@ import {
   KeyRound,
   Bike,
   Activity,
+  Calendar,
   X,
   LogOut,
 } from 'lucide-react'
@@ -23,6 +24,7 @@ const navItems = [
   { href: '/liberacao-cpf', label: 'Liberação de Veículos', icon: KeyRound },
   { href: '/recebimento', label: 'Recebimento de Motos', icon: Bike },
   { href: '/movimentacao', label: 'Funções', icon: Activity },
+  { href: '/agendados', label: 'Agendados', icon: Calendar },
 ]
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
