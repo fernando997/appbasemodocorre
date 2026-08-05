@@ -381,31 +381,50 @@ function VistoriaEntregaContent() {
         }
       }
 
-      const pdfBlob = await gerarPdfVistoriaEntrega({
-        placa: placa!.trim().toUpperCase(),
-        contrato: contrato!,
-        km,
-        selfieDataUrl: selfie,
-        fotos: FOTOS_ENTREGA.map(f => ({
-          label: f.label,
-          dataUrl: fotos[f.id] || null,
-        })),
-        geoLocation,
-      })
-
       async function uploadArquivo(file: File): Promise<string> {
         const form = new FormData()
         form.append('foto', file, file.name)
         const res = await fetch('/api/upload-foto', { method: 'POST', body: form })
-        const data = await res.json()
-        if (!res.ok) throw new Error(`Upload falhou: HTTP ${res.status}`)
+        const text = await res.text()
+        if (!res.ok) throw new Error(`HTTP ${res.status} (${(file.size / 1024 / 1024).toFixed(1)}MB) — ${text.slice(0, 200)}`)
+        const data = JSON.parse(text)
         return data.url as string
       }
 
-      const pdfUrl = await uploadArquivo(
-        new File([pdfBlob], `VISTORIA-ENTREGA-${placa!.trim().toUpperCase()}.pdf`, { type: 'application/pdf' })
-      )
-      const videoUrl = videoAvariasFile ? await uploadArquivo(videoAvariasFile) : ''
+      let pdfBlob: Blob
+      try {
+        pdfBlob = await gerarPdfVistoriaEntrega({
+          placa: placa!.trim().toUpperCase(),
+          contrato: contrato!,
+          km,
+          selfieDataUrl: selfie,
+          fotos: FOTOS_ENTREGA.map(f => ({
+            label: f.label,
+            dataUrl: fotos[f.id] || null,
+          })),
+          geoLocation,
+        })
+      } catch (err) {
+        throw new Error(`Erro ao gerar PDF: ${String(err)}`)
+      }
+
+      let pdfUrl: string
+      try {
+        pdfUrl = await uploadArquivo(
+          new File([pdfBlob], `VISTORIA-ENTREGA-${placa!.trim().toUpperCase()}.pdf`, { type: 'application/pdf' })
+        )
+      } catch (err) {
+        throw new Error(`Erro ao enviar PDF: ${String(err)}`)
+      }
+
+      let videoUrl = ''
+      if (videoAvariasFile) {
+        try {
+          videoUrl = await uploadArquivo(videoAvariasFile)
+        } catch (err) {
+          throw new Error(`Erro ao enviar video: ${String(err)}`)
+        }
+      }
 
       // Registra/verifica quem já terminou a vistoria de substituição — a moto
       // antiga pode ser finalizada pelo usuário (outra tela) antes ou depois desta
@@ -432,11 +451,15 @@ function VistoriaEntregaContent() {
         ONDE: 'MOTO-NOVA',
       })
 
-      await chamarBubble('base_vistoria_nova_sub', body, 'json')
+      try {
+        await chamarBubble('base_vistoria_nova_sub', body, 'json')
+      } catch (err) {
+        throw new Error(`Erro ao registrar vistoria: ${String(err)}`)
+      }
 
       mudarEtapa(7)
     } catch (err) {
-      setErroEnvio(`Erro ao enviar vistoria: ${String(err)}`)
+      setErroEnvio(String(err))
     } finally {
       setEnviando(false)
     }

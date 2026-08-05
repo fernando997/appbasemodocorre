@@ -5,7 +5,7 @@
 type Opcoes = { maxWidth?: number; videoBitsPerSecond?: number }
 
 export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<File> {
-  const { maxWidth = 640, videoBitsPerSecond = 800_000 } = opcoes
+  const { maxWidth = 480, videoBitsPerSecond = 500_000 } = opcoes
 
   return new Promise((resolve, reject) => {
     const videoEl = document.createElement('video')

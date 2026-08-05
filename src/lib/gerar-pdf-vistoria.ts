@@ -60,7 +60,7 @@ async function drawLogo(doc: jsPDF, centerX: number, y: number): Promise<number>
   }
 }
 
-async function compressImage(dataUrl: string, maxDim = 1000, quality = 0.6): Promise<string> {
+async function compressImage(dataUrl: string, maxDim = 900, quality = 0.5): Promise<string> {
   try {
     const img = await loadImage(dataUrl)
     const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
