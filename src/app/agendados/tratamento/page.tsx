@@ -38,13 +38,6 @@ import { format } from 'date-fns'
 
 type Registro = Record<string, unknown>
 
-// Regras de negócio de mensagens-liberacao.txt: texto da ação a executar por status atual
-const ACAO_POR_STATUS: Record<string, string> = {
-  'ENTREGA PREVISTA': 'EFETUAR TESTE DE RASTREAMENTO',
-  'AGUARDANDO LIBERAÇÃO': 'EFETUAR LIBERAÇÃO DO VEÍCULO',
-  'ENTREGA AUTORIZADA': 'CONFIRMAR A ENTREGA NO SISTEMA',
-}
-
 // Classes literais (Tailwind precisa ver a string completa pra gerar o CSS)
 const CORES_BADGE = [
   'bg-[#6C63FF]/10 text-[#6C63FF] border-[#6C63FF]/25',
@@ -84,16 +77,32 @@ function iconePorTexto(texto: string): LucideIcon {
   return Tag
 }
 
-type StatusSinal = { respondeu: boolean; horas_sem_comunicacao?: number }
-type ResultadoSinal = { principal: StatusSinal; backup: StatusSinal }
+type Loc = { lat: number | null; long: number | null }
+type ResultadoSinal = { plataforma: string | null; localizacoes: Record<string, Loc> }
 
-// Mock — ainda não existe endpoint real de rastreador no projeto
-async function emitirSinal(): Promise<ResultadoSinal> {
-  await new Promise((r) => setTimeout(r, 1200))
-  return {
-    principal: { respondeu: true, horas_sem_comunicacao: 0 },
-    backup: { respondeu: false, horas_sem_comunicacao: 14 },
-  }
+function temPosicao(loc: Loc | undefined): boolean {
+  return loc?.lat != null && loc?.long != null
+}
+
+// Mesma chamada de teste de rastreador usada em /movimentacao (vistoria)
+async function emitirSinal(placa: string): Promise<ResultadoSinal> {
+  const res = await fetch('/api/rastreador', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ placa }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+// Confirma no Bubble que os 2 rastreadores (principal e backup) responderam pra essa previsão
+async function confirmarTesteRastreamento(previstoId: string): Promise<void> {
+  const res = await fetch(`${BUBBLE_BASE}/teste-rastreamento`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apikey: BUBBLE_KEY, previsto: previstoId }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
 
 // Mock — ainda não existe endpoint real de confirmação de entrega
@@ -153,18 +162,77 @@ function ConfirmarEntregaDialog({ placa }: { placa: string }) {
   )
 }
 
+// Mock — ainda não existe endpoint real de confirmação de recebimento
+async function confirmarRecebimentoMock(): Promise<void> {
+  await new Promise((r) => setTimeout(r, 800))
+}
+
+function ConfirmarRecebimentoDialog({ placa }: { placa: string }) {
+  const [aberto, setAberto] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
+  const [confirmado, setConfirmado] = useState(false)
+
+  async function confirmar() {
+    setConfirmando(true)
+    await confirmarRecebimentoMock()
+    setConfirmado(true)
+    setConfirmando(false)
+  }
+
+  return (
+    <Dialog
+      open={aberto}
+      onOpenChange={(open) => {
+        setAberto(open)
+        if (!open) setConfirmado(false)
+      }}
+    >
+      <DialogTrigger render={<Button className="w-full" />}>
+        Confirmar Recebimento
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirmar Recebimento</DialogTitle>
+        </DialogHeader>
+        {confirmado ? (
+          <div className="flex items-center gap-2 text-green-700 text-sm font-medium bg-green-50 rounded-lg px-3 py-2.5">
+            <CheckCircle2 className="w-4 h-4" />
+            Recebimento confirmado com sucesso.
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Confirma que a moto <span className="font-mono font-medium text-foreground">{placa}</span> foi recebida na base?
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAberto(false)} disabled={confirmando}>Cancelar</Button>
+              <Button onClick={confirmar} disabled={confirmando} className="bg-green-600 hover:bg-green-700">
+                {confirmando ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Confirmando...</>
+                ) : 'Sim, foi recebida'}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function ConteudoAcaoPopup({
   descricaoStatus,
+  descricaoAcao,
   cliente,
-  acaoFixa,
   placa,
   agendado,
+  onAtualizado,
 }: {
   descricaoStatus: string
+  descricaoAcao: string
   cliente?: Registro
-  acaoFixa?: string
   placa: string
   agendado: Registro
+  onAtualizado?: () => void
 }) {
   const router = useRouter()
   const [acionando, setAcionando] = useState(false)
@@ -176,8 +244,13 @@ function ConteudoAcaoPopup({
     setErro(null)
     setResultado(null)
     try {
-      const res = await emitirSinal()
+      const res = await emitirSinal(placa)
       setResultado(res)
+      const ambosResponderam = temPosicao(res.localizacoes.principal) && temPosicao(res.localizacoes.backup)
+      if (ambosResponderam) {
+        await confirmarTesteRastreamento(String(agendado._id))
+        onAtualizado?.()
+      }
     } catch {
       setErro('Não foi possível acionar o rastreador. Tente novamente.')
     } finally {
@@ -185,31 +258,23 @@ function ConteudoAcaoPopup({
     }
   }
 
-  if (descricaoStatus === 'DEVOLUÇÃO PREVISTA') {
-    return (
-      <p className="text-sm">
-        Locatário: <span className="font-medium">{String(cliente?.nome_completo ?? '-')}</span>
-      </p>
-    )
-  }
-
-  if (descricaoStatus === 'ENTREGA PREVISTA') {
+  if (descricaoAcao === 'EFETUAR TESTE DE RASTREAMENTO') {
     return (
       <div className="space-y-3">
-        <p className="font-medium text-sm">{acaoFixa}</p>
+        <p className="font-medium text-sm">{descricaoAcao}</p>
         {erro && <p className="text-xs text-red-500 bg-red-50 rounded px-2 py-1.5">{erro}</p>}
         {resultado && (
           <div className="border rounded-lg overflow-hidden">
             <div className="bg-zinc-100 px-3 py-2">
               <p className="text-xs font-medium text-zinc-600">Resposta do rastreador</p>
             </div>
-            {(['principal', 'backup'] as const).map((tipo) => {
-              const s = resultado[tipo]
+            {Object.entries(resultado.localizacoes).map(([tipo, loc]) => {
+              const respondeu = temPosicao(loc)
               return (
-                <div key={tipo} className={`flex items-center justify-between px-3 py-2.5 border-t ${s.respondeu ? 'bg-green-50' : 'bg-red-50'}`}>
+                <div key={tipo} className={`flex items-center justify-between px-3 py-2.5 border-t ${respondeu ? 'bg-green-50' : 'bg-red-50'}`}>
                   <span className="text-sm font-medium capitalize">{tipo}</span>
                   <div className="flex items-center gap-1.5">
-                    {s.respondeu ? (
+                    {respondeu ? (
                       <>
                         <CheckCircle2 className="w-4 h-4 text-green-500" />
                         <span className="text-xs font-semibold text-green-700">Respondeu</span>
@@ -217,9 +282,7 @@ function ConteudoAcaoPopup({
                     ) : (
                       <>
                         <XCircle className="w-4 h-4 text-red-500" />
-                        <span className="text-xs font-semibold text-red-600">
-                          Sem sinal há {s.horas_sem_comunicacao}h
-                        </span>
+                        <span className="text-xs font-semibold text-red-600">Sem sinal</span>
                       </>
                     )}
                   </div>
@@ -237,11 +300,11 @@ function ConteudoAcaoPopup({
     )
   }
 
-  if (descricaoStatus === 'AGUARDANDO LIBERAÇÃO') {
+  if (descricaoAcao === 'EFETUAR LIBERAÇÃO DO VEÍCULO') {
     const cpf = String(cliente?.cpf ?? '')
     return (
       <div className="space-y-3">
-        <p className="font-medium text-sm">{acaoFixa}</p>
+        <p className="font-medium text-sm">{descricaoAcao}</p>
         <Button
           className="w-full"
           onClick={() => {
@@ -255,17 +318,34 @@ function ConteudoAcaoPopup({
     )
   }
 
-  if (descricaoStatus === 'ENTREGA AUTORIZADA') {
+  if (descricaoAcao === 'CONFIRMAR A ENTREGA NO SISTEMA') {
     return (
       <div className="space-y-3">
-        <p className="font-medium text-sm">{acaoFixa}</p>
+        <p className="font-medium text-sm">{descricaoAcao}</p>
         <ConfirmarEntregaDialog placa={placa} />
       </div>
     )
   }
 
-  if (acaoFixa) {
-    return <p className="font-medium text-sm">{acaoFixa}</p>
+  if (descricaoAcao === 'CONFIRMAR RECEBIMENTO DO VEÍCULO') {
+    return (
+      <div className="space-y-3">
+        <p className="font-medium text-sm">{descricaoAcao}</p>
+        <ConfirmarRecebimentoDialog placa={placa} />
+      </div>
+    )
+  }
+
+  if (descricaoStatus === 'DEVOLUÇÃO PREVISTA') {
+    return (
+      <p className="text-sm">
+        Locatário: <span className="font-medium">{String(cliente?.nome_completo ?? '-')}</span>
+      </p>
+    )
+  }
+
+  if (descricaoAcao) {
+    return <p className="font-medium text-sm">{descricaoAcao}</p>
   }
 
   return <p className="text-muted-foreground text-sm">Nenhuma ação pendente para este status.</p>
@@ -368,16 +448,16 @@ export default function TratamentoPage() {
               <div className="text-center py-12 text-muted-foreground text-sm">Nenhuma moto agendada.</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[64rem]">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      <th className="text-left px-5 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Placa</th>
-                      <th className="text-left px-5 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Unidade</th>
-                      <th className="text-left px-5 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Frota</th>
-                      <th className="text-left px-5 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Horário</th>
-                      <th className="text-left px-5 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Status</th>
-                      <th className="text-left px-5 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Ações</th>
-                      <th className="text-left px-5 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Executar</th>
+                      <th className="text-left px-3 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Placa</th>
+                      <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Unidade</th>
+                      <th className="text-left px-3 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Frota</th>
+                      <th className="text-left px-3 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Horário</th>
+                      <th className="text-left px-3 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Status</th>
+                      <th className="text-left px-3 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Ações</th>
+                      <th className="text-left px-3 py-3 font-medium text-muted-foreground whitespace-nowrap text-xs uppercase tracking-wide">Executar</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -391,21 +471,20 @@ export default function TratamentoPage() {
                       const horario = item['data-hora'] ? format(new Date(item['data-hora']), 'dd/MM HH:mm') : '-'
                       const descricaoStatus = String(status?.['descrição'] ?? '')
                       const descricaoAcao = String(acao?.['descrição'] ?? '')
-                      const acaoFixa = ACAO_POR_STATUS[descricaoStatus]
                       const IconeStatus = iconePorTexto(descricaoStatus)
                       const IconeAcao = iconePorTexto(descricaoAcao)
                       return (
                         <tr key={item._id} className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${i % 2 !== 0 ? 'bg-muted/10' : ''}`}>
-                          <td className="px-5 py-3.5">
+                          <td className="px-3 py-3.5">
                             <div className="flex items-center gap-2 font-mono font-medium text-sm">
-                              <Bike className="w-3.5 h-3.5 text-[#6C63FF]" />
+                              <Bike className="w-3.5 h-3.5 text-[#6C63FF] shrink-0" />
                               {String(veiculo?.placa ?? '-')}
                             </div>
                           </td>
-                          <td className="px-5 py-3.5 text-sm whitespace-nowrap">{String(unidade?.['Nome Unidade'] ?? '-')}</td>
-                          <td className="px-5 py-3.5 text-sm whitespace-nowrap">{String(frota?.nome ?? '-')}</td>
-                          <td className="px-5 py-3.5 text-sm whitespace-nowrap">{horario}</td>
-                          <td className="px-5 py-3.5 whitespace-nowrap">
+                          <td className="px-3 py-3.5 text-sm">{String(unidade?.['Nome Unidade'] ?? '-')}</td>
+                          <td className="px-3 py-3.5 text-sm">{String(frota?.nome ?? '-')}</td>
+                          <td className="px-3 py-3.5 text-sm whitespace-nowrap">{horario}</td>
+                          <td className="px-3 py-3.5 whitespace-nowrap">
                             {status ? (
                               <Badge className={`${classeBadgePorTexto(descricaoStatus)} text-xs font-medium gap-1 whitespace-nowrap`}>
                                 <IconeStatus className="w-3 h-3 shrink-0" />
@@ -415,7 +494,7 @@ export default function TratamentoPage() {
                               <span className="text-xs text-muted-foreground">-</span>
                             )}
                           </td>
-                          <td className="px-5 py-3.5 whitespace-nowrap">
+                          <td className="px-3 py-3.5 whitespace-nowrap">
                             {acao ? (
                               <Badge className={`${classeBadgePorTexto(descricaoAcao)} text-xs font-medium gap-1 whitespace-nowrap`}>
                                 <IconeAcao className="w-3 h-3 shrink-0" />
@@ -427,7 +506,7 @@ export default function TratamentoPage() {
                               </button>
                             )}
                           </td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-3 py-3.5">
                             <Dialog>
                               <DialogTrigger
                                 render={
@@ -442,10 +521,11 @@ export default function TratamentoPage() {
                                 </DialogHeader>
                                 <ConteudoAcaoPopup
                                   descricaoStatus={descricaoStatus}
+                                  descricaoAcao={descricaoAcao}
                                   cliente={cliente}
-                                  acaoFixa={acaoFixa}
                                   placa={String(veiculo?.placa ?? '')}
                                   agendado={item}
+                                  onAtualizado={consultarAgendadas}
                                 />
                               </DialogContent>
                             </Dialog>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bike, Building2, FileText, Loader2, User } from 'lucide-react'
+import { Bike, Loader2 } from 'lucide-react'
 import { BUBBLE_BASE, BUBBLE_KEY } from '@/lib/config'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
 import { format } from 'date-fns'
@@ -13,20 +13,41 @@ type Registro = Record<string, unknown>
 type Agendado = {
   _id: string
   unidade: string
-  status: string
+  'status-atual'?: string
+  'ação'?: string
   contrato: string
   'data-hora': number
   locatario: string
   veiculo: string
 }
 
+// Classes literais (Tailwind precisa ver a string completa pra gerar o CSS)
+const CORES_BADGE = [
+  'bg-[#6C63FF]/15 text-[#A5A0FF] border-[#6C63FF]/30',
+  'bg-[#22C55E]/15 text-[#6EE7A0] border-[#22C55E]/30',
+  'bg-[#F59E0B]/15 text-[#FBBF6B] border-[#F59E0B]/30',
+  'bg-[#EF4444]/15 text-[#FB9494] border-[#EF4444]/30',
+  'bg-[#0EA5E9]/15 text-[#7DD3FC] border-[#0EA5E9]/30',
+  'bg-[#EC4899]/15 text-[#F5A8CE] border-[#EC4899]/30',
+  'bg-[#14B8A6]/15 text-[#5EEAD4] border-[#14B8A6]/30',
+  'bg-[#8B5CF6]/15 text-[#C4B5FD] border-[#8B5CF6]/30',
+]
+
+// Escolhe sempre a mesma cor pro mesmo texto (status/ação), sem precisar cadastrar cor por cor
+function classeBadgePorTexto(texto: string): string {
+  let hash = 0
+  for (let i = 0; i < texto.length; i++) {
+    hash = texto.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return CORES_BADGE[Math.abs(hash) % CORES_BADGE.length]
+}
+
 export default function LiberacaoPage() {
   const router = useRouter()
   const [agendados, setAgendados] = useState<Agendado[]>([])
-  const [contratoMap, setContratoMap] = useState<Record<string, Registro>>({})
   const [veiculoMap, setVeiculoMap] = useState<Record<string, Registro>>({})
-  const [unidadeMap, setUnidadeMap] = useState<Record<string, Registro>>({})
-  const [clienteMap, setClienteMap] = useState<Record<string, Registro>>({})
+  const [statusMap, setStatusMap] = useState<Record<string, Registro>>({})
+  const [acoesMap, setAcoesMap] = useState<Record<string, Registro>>({})
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [agora, setAgora] = useState<Date | null>(null)
@@ -45,14 +66,12 @@ export default function LiberacaoPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = JSON.parse(text)
       const response = data.response ?? data
-      const contratos: Registro[] = response.contratos ?? []
       const veiculos: Registro[] = response.veiculos ?? []
-      const unidadesResp: Registro[] = response.unidade ?? []
-      const clientes: Registro[] = response.cliente ?? []
-      setContratoMap(Object.fromEntries(contratos.map((c) => [c._id as string, c])))
+      const statusResp: Registro[] = response.status ?? []
+      const acoesResp: Registro[] = response['ações'] ?? []
       setVeiculoMap(Object.fromEntries(veiculos.map((v) => [v._id as string, v])))
-      setUnidadeMap(Object.fromEntries(unidadesResp.map((u) => [u._id as string, u])))
-      setClienteMap(Object.fromEntries(clientes.map((c) => [c._id as string, c])))
+      setStatusMap(Object.fromEntries(statusResp.map((s) => [s._id as string, s])))
+      setAcoesMap(Object.fromEntries(acoesResp.map((a) => [a._id as string, a])))
       setAgendados(response.agendados ?? [])
     } catch {
       setErro('Não foi possível carregar as motos agendadas.')
@@ -114,9 +133,10 @@ export default function LiberacaoPage() {
           <div className="max-w-[110rem] mx-auto space-y-4">
             {fila.map((item, i) => {
               const veiculo = veiculoMap[item.veiculo]
-              const contrato = contratoMap[item.contrato]
-              const unidade = unidadeMap[item.unidade]
-              const cliente = clienteMap[item.locatario]
+              const status = item['status-atual'] ? statusMap[item['status-atual']] : null
+              const acao = item['ação'] ? acoesMap[item['ação']] : null
+              const descricaoStatus = String(status?.['descrição'] ?? '-')
+              const descricaoAcao = String(acao?.['descrição'] ?? '-')
               const horario = item['data-hora'] ? format(new Date(item['data-hora']), 'HH:mm') : '-'
               return (
                 <div
@@ -132,26 +152,18 @@ export default function LiberacaoPage() {
                     <span className="font-mono font-bold text-3xl tracking-wide">{String(veiculo?.placa ?? '-')}</span>
                   </div>
 
-                  <div className="flex-1 grid grid-cols-[2fr_1fr_1fr] gap-6 min-w-0">
+                  <div className="flex-1 grid grid-cols-2 gap-6 min-w-0">
                     <div className="min-w-0">
-                      <p className="text-[#8E92B3] text-xs uppercase tracking-wide flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5" />Locatário
-                      </p>
-                      <p className="text-xl font-semibold truncate mt-1" title={String(cliente?.nome_completo ?? '-')}>{String(cliente?.nome_completo ?? '-')}</p>
+                      <p className="text-[#8E92B3] text-xs uppercase tracking-wide">Status</p>
+                      <span className={`inline-block mt-1 px-2.5 py-1 rounded-lg border text-sm font-semibold leading-snug break-words ${status ? classeBadgePorTexto(descricaoStatus) : 'text-[#8E92B3] border-transparent'}`}>
+                        {descricaoStatus}
+                      </span>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[#8E92B3] text-xs uppercase tracking-wide flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5" />Unidade
-                      </p>
-                      <p className="text-xl font-semibold truncate mt-1">{String(unidade?.['Nome Unidade'] ?? '-')}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[#8E92B3] text-xs uppercase tracking-wide flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5" />Contrato
-                      </p>
-                      <p className="text-xl font-semibold truncate mt-1">
-                        {contrato?.['Numero ctr'] != null ? String(contrato['Numero ctr']) : '-'}
-                      </p>
+                      <p className="text-[#8E92B3] text-xs uppercase tracking-wide">Ação</p>
+                      <span className={`inline-block mt-1 px-2.5 py-1 rounded-lg border text-sm font-semibold leading-snug break-words ${acao ? classeBadgePorTexto(descricaoAcao) : 'text-[#8E92B3] border-transparent'}`}>
+                        {descricaoAcao}
+                      </span>
                     </div>
                   </div>
 
