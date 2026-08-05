@@ -422,7 +422,7 @@ function VistoriaEntregaContent() {
       }
 
       try {
-        await chamarBubble('base_vistoria_disponibilidade', body, 'json')
+        await chamarBubble('base_vistoria_entrega-base', body, 'json')
       } catch (err) {
         throw new Error(`Erro ao registrar vistoria: ${String(err)}`)
       }
