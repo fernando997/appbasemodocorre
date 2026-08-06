@@ -1,12 +1,13 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Calendar, ChevronRight, ClipboardList, Monitor } from 'lucide-react'
+import { Calendar, ChevronRight, ClipboardCheck, ClipboardList, Monitor } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 
 const opcoes = [
   { href: '/liberacao', label: 'Tela de TV', desc: 'Painel de fila para exibir em TV', icon: Monitor, cor: 'bg-[#1B2043]' },
   { href: '/agendados/tratamento', label: 'Tratamento', desc: 'Gerenciar as motos agendadas', icon: ClipboardList, cor: 'bg-[#22C55E]' },
+  { href: '/checkin-base', label: 'Check-in na Base', desc: 'Fazer check-in das motos na base', icon: ClipboardCheck, cor: 'bg-[#3B82F6]' },
 ]
 
 export default function AgendadosPage() {

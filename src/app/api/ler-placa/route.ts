@@ -60,6 +60,8 @@ O formato é OBRIGATORIAMENTE: LLL NLNN (7 caracteres)
 - Posição 7: NÚMERO (0-9)
 Exemplo: ABC1D23. Em placas de moto os caracteres ficam em DUAS linhas: as 3 letras em cima e os 4 caracteres restantes (número, letra, número, número) embaixo.
 
+A placa SEMPRE tem exatamente 7 caracteres — nunca 6, nunca 8. É comum haver letras ou números iguais ou parecidos em posições vizinhas (ex: "OO9", "00", "AA", "22") — cada posição é um caractere separado e independente, mesmo que pareçam se repetir ou se fundir visualmente. NUNCA junte dois caracteres vizinhos parecidos em um só nem pule um caractere porque "parece igual ao anterior" — conte as 7 posições visíveis na placa antes de responder.
+
 Antes de responder, analise CADA um dos 7 caracteres individualmente, um de cada vez, descrevendo o traço/formato exato que você enxerga (retas, curvas, laços fechados, ganchos) e só then decida qual caractere é — não pule direto pro palpite mais comum. Preste atenção especial em pares fáceis de confundir (aparecem juntos porque têm traços parecidos, mas o formato exige um tipo específico em cada posição):
 - 0/O/Q/D — nas posições de letra é O/Q/D, nas de número é 0
 - 1/I/L — nas posições de letra é I ou L, nas de número é 1
@@ -75,9 +77,12 @@ Antes de responder, analise CADA um dos 7 caracteres individualmente, um de cada
 - 3/8 (dois números) — 8 tem dois laços fechados, 3 é aberto à esquerda
 - 6/9 (dois números) — mesma forma invertida: 6 tem o laço embaixo, 9 tem o laço em cima
 
-Responda EXATAMENTE neste formato, uma linha para cada uma das duas partes:
-ANALISE: (uma frase curta por caractere, ex: "pos1=U reta e curva no fundo, pos2=G tem barra no meio, ...")
-PLACA: (só os 7 caracteres finais, sem espaços/traços/pontuação)`,
+Antes de escrever a linha PLACA, confira cada uma das 7 posições contra o padrão obrigatório LLLNLNN (posições 1,2,3,5 = LETRA / posições 4,6,7 = NÚMERO). Se algum caractere que você identificou não bater com o tipo exigido pela posição (ex: colocou uma letra numa posição de número), troque pelo caractere equivalente do tipo certo antes de responder — nunca entregue um caractere do tipo errado pra posição.
+
+Responda EXATAMENTE neste formato, uma linha para cada uma das três partes:
+ANALISE: (uma frase curta por caractere, ex: "pos1=U reta e curva no fundo, pos2=G tem barra no meio, ...") — precisa ter exatamente 7 descrições, uma por posição, mesmo que dois caracteres vizinhos pareçam iguais
+TOTAL: (quantidade de caracteres que você identificou — tem que ser 7; se contou diferente de 7, revise antes de responder)
+PLACA: (os 7 caracteres finais no formato LLLNLNN, sem espaços/traços/pontuação, já conferidos contra o padrão)`,
             },
           ],
         }],
