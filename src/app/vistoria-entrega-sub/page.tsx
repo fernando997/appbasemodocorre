@@ -342,18 +342,17 @@ function VistoriaEntregaContent() {
     setEnviando(true)
     setErroEnvio('')
     try {
-      if (!geoLocation) {
+      let localizacaoAtual = geoLocation
+      if (!localizacaoAtual) {
         try {
-          await new Promise<void>((resolve, reject) => {
+          localizacaoAtual = await new Promise<{ lat: number; lng: number }>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                setGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-                resolve()
-              },
+              (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
               () => reject(),
               { enableHighAccuracy: true, timeout: 10000 }
             )
           })
+          setGeoLocation(localizacaoAtual)
         } catch {
           // best-effort
         }
@@ -369,6 +368,15 @@ function VistoriaEntregaContent() {
         return data.url as string
       }
 
+      let videoUrl = ''
+      if (videoAvariasFile) {
+        try {
+          videoUrl = await uploadArquivo(videoAvariasFile)
+        } catch (err) {
+          throw new Error(`Erro ao enviar video: ${String(err)}`)
+        }
+      }
+
       let pdfBlob: Blob
       try {
         pdfBlob = await gerarPdfVistoriaEntrega({
@@ -380,7 +388,8 @@ function VistoriaEntregaContent() {
             label: f.label,
             dataUrl: fotos[f.id] || null,
           })),
-          geoLocation,
+          geoLocation: localizacaoAtual,
+          videoUrl,
         })
       } catch (err) {
         throw new Error(`Erro ao gerar PDF: ${String(err)}`)
@@ -393,15 +402,6 @@ function VistoriaEntregaContent() {
         )
       } catch (err) {
         throw new Error(`Erro ao enviar PDF: ${String(err)}`)
-      }
-
-      let videoUrl = ''
-      if (videoAvariasFile) {
-        try {
-          videoUrl = await uploadArquivo(videoAvariasFile)
-        } catch (err) {
-          throw new Error(`Erro ao enviar video: ${String(err)}`)
-        }
       }
 
       // Registra/verifica quem já terminou a vistoria de substituição — a moto

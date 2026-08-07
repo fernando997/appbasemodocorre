@@ -102,7 +102,7 @@ async function obterEndereco(lat: number, lng: number): Promise<string> {
   }
 }
 
-function drawField(doc: jsPDF, label: string, value: unknown, x: number, y: number, w: number) {
+function drawField(doc: jsPDF, label: string, value: unknown, x: number, y: number, w: number, url?: string) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.setTextColor(0, 0, 0)
@@ -120,7 +120,13 @@ function drawField(doc: jsPDF, label: string, value: unknown, x: number, y: numb
   doc.setLineWidth(0.3)
   doc.rect(x, boxY, w, boxH)
 
-  doc.text(lines, x + 3, boxY + 7)
+  if (url) {
+    doc.setTextColor(37, 99, 235)
+    doc.textWithLink(lines, x + 3, boxY + 7, { url })
+  } else {
+    doc.text(lines, x + 3, boxY + 7)
+  }
+  doc.setTextColor(0, 0, 0)
 
   return boxY + boxH + 6
 }
@@ -364,6 +370,7 @@ interface DadosVistoriaEntregaPDF {
   selfieDataUrl: string | null
   fotos: { label: string; dataUrl: string | null }[]
   geoLocation: { lat: number; lng: number } | null
+  videoUrl?: string
 }
 
 export async function gerarPdfVistoriaEntrega(dados: DadosVistoriaEntregaPDF): Promise<Blob> {
@@ -409,6 +416,11 @@ export async function gerarPdfVistoriaEntrega(dados: DadosVistoriaEntregaPDF): P
     ? await obterEndereco(dados.geoLocation.lat, dados.geoLocation.lng)
     : 'Não disponível'
   y = drawField(doc, 'Localização:', locText, leftX, y, contentW)
+
+  // Vídeo
+  if (dados.videoUrl) {
+    y = drawField(doc, 'Vídeo:', dados.videoUrl, leftX, y, contentW, dados.videoUrl)
+  }
 
   // Selfie
   if (selfieComprimida) {
