@@ -1732,7 +1732,12 @@ export default function MovimentacaoPage() {
               {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-700">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a vistoria.</p>
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm text-red-700">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a vistoria.</p>
+                    <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100" onClick={() => testarRastreador(placa)}>
+                      <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -2565,7 +2570,12 @@ export default function MovimentacaoPage() {
               {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-700">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a substituição.</p>
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm text-red-700">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a substituição.</p>
+                    <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100" onClick={() => testarRastreador(placaNovaSub)}>
+                      <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                    </Button>
+                  </div>
                 </div>
               )}
 

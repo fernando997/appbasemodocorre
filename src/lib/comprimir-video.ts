@@ -1,51 +1,72 @@
-// Recomprime um vídeo no navegador via ffmpeg.wasm (decodifica/recodifica direto,
-// sem precisar tocar o vídeo em tempo real) — necessário porque o Vercel limita o corpo
+// Recomprime um vídeo no navegador (redesenha os frames num canvas menor e regrava
+// com MediaRecorder em bitrate baixo) — necessário porque o Vercel limita o corpo
 // das Serverless Functions a ~4.5MB, e vídeo gravado direto da câmera do celular
 // costuma passar disso fácil.
-import { FFmpeg } from '@ffmpeg/ffmpeg'
-import { fetchFile } from '@ffmpeg/util'
-
 type Opcoes = { maxWidth?: number; videoBitsPerSecond?: number }
-
-// Core (~30MB) é baixado uma vez e reaproveitado entre chamadas/vídeos
-let ffmpegPromise: Promise<FFmpeg> | null = null
-
-function carregarFfmpeg(): Promise<FFmpeg> {
-  if (!ffmpegPromise) {
-    ffmpegPromise = (async () => {
-      const ffmpeg = new FFmpeg()
-      await ffmpeg.load({
-        coreURL: '/ffmpeg/ffmpeg-core.js',
-        wasmURL: '/ffmpeg/ffmpeg-core.wasm',
-      })
-      return ffmpeg
-    })()
-  }
-  return ffmpegPromise
-}
 
 export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<File> {
   const { maxWidth = 360, videoBitsPerSecond = 250_000 } = opcoes
-  const ffmpeg = await carregarFfmpeg()
 
-  const extEntrada = file.name.match(/\.\w+$/)?.[0] ?? '.mp4'
-  const nomeEntrada = `entrada${extEntrada}`
-  const nomeSaida = 'saida.mp4'
+  return new Promise((resolve, reject) => {
+    const videoEl = document.createElement('video')
+    videoEl.muted = true
+    videoEl.playsInline = true
+    const url = URL.createObjectURL(file)
+    videoEl.src = url
 
-  await ffmpeg.writeFile(nomeEntrada, await fetchFile(file))
-  try {
-    await ffmpeg.exec([
-      '-i', nomeEntrada,
-      '-vf', `scale='min(${maxWidth},iw)':-2`,
-      '-b:v', `${Math.round(videoBitsPerSecond / 1000)}k`,
-      '-an',
-      nomeSaida,
-    ])
-    const data = await ffmpeg.readFile(nomeSaida)
-    const novoNome = file.name.replace(/\.\w+$/, '') + '.mp4'
-    return new File([data as BlobPart], novoNome, { type: 'video/mp4' })
-  } finally {
-    await ffmpeg.deleteFile(nomeEntrada).catch(() => {})
-    await ffmpeg.deleteFile(nomeSaida).catch(() => {})
-  }
+    videoEl.onloadedmetadata = () => {
+      const scale = Math.min(1, maxWidth / videoEl.videoWidth)
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(videoEl.videoWidth * scale) || maxWidth
+      canvas.height = Math.round(videoEl.videoHeight * scale) || maxWidth
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        URL.revokeObjectURL(url)
+        reject(new Error('Canvas não suportado'))
+        return
+      }
+
+      const stream = canvas.captureStream(30)
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9'
+        : 'video/webm'
+      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond })
+      const chunks: Blob[] = []
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
+      recorder.onstop = () => {
+        URL.revokeObjectURL(url)
+        const blob = new Blob(chunks, { type: 'video/webm' })
+        const novoNome = file.name.replace(/\.\w+$/, '') + '.webm'
+        resolve(new File([blob], novoNome, { type: 'video/webm' }))
+      }
+      recorder.onerror = () => {
+        URL.revokeObjectURL(url)
+        reject(new Error('Erro ao comprimir vídeo'))
+      }
+
+      videoEl.onended = () => recorder.stop()
+      videoEl.onerror = () => {
+        URL.revokeObjectURL(url)
+        reject(new Error('Erro ao carregar vídeo'))
+      }
+
+      videoEl.play().then(() => {
+        recorder.start()
+        const desenhar = () => {
+          if (videoEl.paused || videoEl.ended) return
+          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height)
+          requestAnimationFrame(desenhar)
+        }
+        desenhar()
+      }).catch((err) => {
+        URL.revokeObjectURL(url)
+        reject(err)
+      })
+    }
+
+    videoEl.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Erro ao carregar vídeo'))
+    }
+  })
 }

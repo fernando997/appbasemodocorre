@@ -10,9 +10,6 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
-    "@ffmpeg/core": "^0.12.10",
-    "@ffmpeg/ffmpeg": "^0.12.15",
-    "@ffmpeg/util": "^0.12.2",
     "@hookform/resolvers": "^5.2.2",
     "@tanstack/react-query": "^5.99.2",
     "@tanstack/react-table": "^8.21.3",
