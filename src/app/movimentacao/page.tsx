@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { gerarPdfVistoria } from '@/lib/gerar-pdf-vistoria'
+import { comprimirVideo } from '@/lib/comprimir-video'
 
 // Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -420,6 +421,11 @@ export default function MovimentacaoPage() {
   const [enderecosRastreador, setEnderecosRastreador] = useState<Record<string, string>>({})
   const [linkVistoriaSub, setLinkVistoriaSub] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
+  const [linkVistoriaEntrega, setLinkVistoriaEntrega] = useState('')
+  const [linkEntregaCopiado, setLinkEntregaCopiado] = useState(false)
+  const [contratoAptoEntrega, setContratoAptoEntrega] = useState(false)
+  // Compartilhado entre Disponibilidade e Devolução — só uma área de vídeo fica visível por vez
+  const [comprimindoVideo, setComprimindoVideo] = useState(false)
   const [veiculoNovoSub, setVeiculoNovoSub] = useState<Record<string, unknown> | null>(null)
   const [carregandoNovoSub, setCarregandoNovoSub] = useState(false)
 
@@ -431,12 +437,22 @@ export default function MovimentacaoPage() {
   const videoDetalhesRef = useRef<HTMLInputElement>(null)
   const videoViolacaoRef = useRef<HTMLInputElement>(null)
 
-  function onVideoDisponibilidade(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onVideoDisponibilidade(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setVideoDisponibilidade(URL.createObjectURL(file))
-    setVideoDisponibilidadeFile(file)
     e.target.value = ''
+    setComprimindoVideo(true)
+    try {
+      const arquivo = await comprimirVideo(file)
+      setVideoDisponibilidade(URL.createObjectURL(arquivo))
+      setVideoDisponibilidadeFile(arquivo)
+    } catch {
+      // Compressão falhou (ex: navegador sem suporte a MediaRecorder) — usa o original
+      setVideoDisponibilidade(URL.createObjectURL(file))
+      setVideoDisponibilidadeFile(file)
+    } finally {
+      setComprimindoVideo(false)
+    }
   }
 
   function onFotoDevolucao(e: React.ChangeEvent<HTMLInputElement>) {
@@ -455,12 +471,22 @@ export default function MovimentacaoPage() {
   }
 
   function onVideoDevolucao(setter: (v: string | null) => void, fileSetter: (f: File | null) => void) {
-    return (e: React.ChangeEvent<HTMLInputElement>) => {
+    return async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!file) return
-      setter(URL.createObjectURL(file))
-      fileSetter(file)
       e.target.value = ''
+      setComprimindoVideo(true)
+      try {
+        const arquivo = await comprimirVideo(file)
+        setter(URL.createObjectURL(arquivo))
+        fileSetter(arquivo)
+      } catch {
+        // Compressão falhou (ex: navegador sem suporte a MediaRecorder) — usa o original
+        setter(URL.createObjectURL(file))
+        fileSetter(file)
+      } finally {
+        setComprimindoVideo(false)
+      }
     }
   }
 
@@ -695,6 +721,8 @@ export default function MovimentacaoPage() {
         OLEO: sn(perguntasDevolucao.fumandoEscapamento),
         FILTRO: sn(perguntasDevolucao.semFiltroAr),
         ESCAPAMENTO: sn(perguntasDevolucao.fumandoEscapamento, perguntasDevolucao.canoAdulterado),
+        NOME: String(user?.Nome ?? user?.nome ?? ''),
+        USER: String(user?.user ?? ''),
       }
 
       await chamarBubble('vistoria_devolucao', body, 'json')
@@ -781,6 +809,8 @@ export default function MovimentacaoPage() {
         TXT: modo,
         MSG: registroTexto,
         ONDE: 'MOTO-ANTIGA',
+        NOME: String(user?.Nome ?? user?.nome ?? ''),
+        USER: String(user?.user ?? ''),
       })
 
       const endpointFinal = modo === 'RETIRAR' ? 'base-vitoria-sub-retirar' : 'base_vistoria_nova_sub'
@@ -832,6 +862,8 @@ export default function MovimentacaoPage() {
     setErro(null)
     setEtapaEnvio('vistoria')
     try {
+      const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
+
       const uploadForm = new FormData()
       uploadForm.append('foto', videoDisponibilidadeFile, videoDisponibilidadeFile.name)
       const uploadRes = await fetch('/api/upload-foto', { method: 'POST', body: uploadForm })
@@ -844,6 +876,8 @@ export default function MovimentacaoPage() {
         km: kmDisponibilidade,
         nivel_comb: combustivelDisponibilidade,
         video: videoUrl,
+        NOME: String(user?.Nome ?? user?.nome ?? ''),
+        USER: String(user?.user ?? ''),
       }
 
       await chamarBubble('base_vistoria_disponibilidade', body, 'json')
@@ -938,12 +972,26 @@ export default function MovimentacaoPage() {
     }
   }
 
+  // Mesma trava usada em /vistoria-entrega: contrato só está apto se vier "cliente" preenchido
+  async function checarContratoAptoEntrega(placaValue: string, numeroContrato: unknown) {
+    if (!numeroContrato) { setContratoAptoEntrega(false); return }
+    try {
+      const data = await chamarBubble('vistoria-entrega', { placa: placaValue.trim().toUpperCase(), contrato: numeroContrato })
+      const cliente = data.response?.cliente
+      const isEmpty = cliente == null || (typeof cliente === 'object' && Object.keys(cliente).length === 0)
+      setContratoAptoEntrega(!isEmpty)
+    } catch {
+      setContratoAptoEntrega(false)
+    }
+  }
+
   async function consultarFuncoes(placaValue: string) {
     if (!placaValue.trim()) return
     setCarregandoFuncoes(true)
     setVeiculoFuncoes(null)
     setVistoriasDisponiveis([])
     setPendenciasVeiculo([])
+    setContratoAptoEntrega(false)
     try {
       const data = await chamarBubble('consulta-veiculo-funcoes', { placa: placaValue.trim().toUpperCase() })
       const vistoriasRaw: Record<string, unknown>[] = data.response?.vistorias ?? []
@@ -952,6 +1000,8 @@ export default function MovimentacaoPage() {
       setVistoriasIncluir(data.response?.['vistorias-incluir'] ?? [])
       setVistoriasRetirar(data.response?.['vistorias-retirar'] ?? [])
       setPendenciasVeiculo(data.response?.pendencia ?? [])
+      const numeroContrato = (data.response?.contrato as { 'Numero ctr'?: number } | undefined)?.['Numero ctr']
+      checarContratoAptoEntrega(placaValue, numeroContrato)
     } catch {
       setErro('Não foi possível consultar as funções disponíveis para esta placa.')
     } finally {
@@ -1467,7 +1517,7 @@ export default function MovimentacaoPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2.5">
-                {TIPOS_VISTORIA.filter(({ tipo }) => (ALIASES_TIPO_VISTORIA[tipo] ?? [tipo]).some(alias => vistoriasDisponiveis.includes(alias))).map(({ tipo, icon: Icon, cor }) => (
+                {TIPOS_VISTORIA.filter(({ tipo }) => tipo === 'ENTREGA' ? contratoAptoEntrega : (ALIASES_TIPO_VISTORIA[tipo] ?? [tipo]).some(alias => vistoriasDisponiveis.includes(alias))).map(({ tipo, icon: Icon, cor }) => (
                   <button
                     key={tipo}
                     onClick={() => {
@@ -1484,6 +1534,11 @@ export default function MovimentacaoPage() {
                       }
                       if (tipo === 'DISPONIBILIDADE') {
                         testarRastreador(placa)
+                      }
+                      if (tipo === 'ENTREGA') {
+                        const contratoObj = veiculoFuncoes?.contrato as { 'Numero ctr'?: number } | undefined
+                        const numeroContrato = contratoObj?.['Numero ctr'] ?? ''
+                        setLinkVistoriaEntrega(`${window.location.origin}/vistoria-entrega?placa=${placa.trim().toUpperCase()}&contrato=${numeroContrato}`)
                       }
                       setTipoSelecionado(tipo)
                     }}
@@ -1604,7 +1659,12 @@ export default function MovimentacaoPage() {
                     ))}
                   </div>
 
-                  {videoDisponibilidade ? (
+                  {comprimindoVideo ? (
+                    <div className="w-full h-40 lg:h-52 border-2 border-dashed border-zinc-300 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                      <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                      <span className="text-sm font-medium">Comprimindo vídeo...</span>
+                    </div>
+                  ) : videoDisponibilidade ? (
                     <div className="relative">
                       <video src={videoDisponibilidade} controls className="w-full rounded-xl border max-h-72 lg:max-h-96 border-green-300" />
                       <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
@@ -1682,7 +1742,7 @@ export default function MovimentacaoPage() {
                 <>
                   <Button
                     className="w-full gap-2 bg-blue-600 hover:bg-blue-700 h-12 text-base"
-                    disabled={!kmDisponibilidade.trim() || !combustivelDisponibilidade || !videoDisponibilidadeFile || (veiculoFuncoes?.km != null && Number(kmDisponibilidade) < Number(veiculoFuncoes.km)) || testandoRastreador || !rastreadorInfo?.plataforma || pendenciasAtivas.length > 0}
+                    disabled={!kmDisponibilidade.trim() || !combustivelDisponibilidade || !videoDisponibilidadeFile || comprimindoVideo || (veiculoFuncoes?.km != null && Number(kmDisponibilidade) < Number(veiculoFuncoes.km)) || testandoRastreador || !rastreadorInfo?.plataforma || pendenciasAtivas.length > 0}
                     onClick={enviarVistoriaDisponibilidade}
                   >
                     <CheckCircle2 className="w-5 h-5" />
@@ -1695,6 +1755,58 @@ export default function MovimentacaoPage() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ ENTREGA ═══════════ */}
+      {acao === 'vistorias' && tipoSelecionado === 'ENTREGA' && (
+        <div className="max-w-md mx-auto">
+          <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+            <div className="bg-[#1B2043] px-5 py-4 flex items-center gap-3">
+              <div className="bg-white/10 p-2 rounded-lg shrink-0">
+                <LogIn className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm">Vistoria de Entrega</p>
+                <p className="text-[#8E92B3] text-xs mt-0.5">Copie o link e envie para o cliente</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Send className="w-4 h-4 text-green-600 shrink-0" />
+                  <p className="text-sm font-semibold text-green-800">Link da vistoria de entrega</p>
+                </div>
+                <p className="text-xs text-green-700">Envie este link para o cliente fazer a vistoria de entrega.</p>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={linkVistoriaEntrega}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 px-3 py-2 text-xs border border-green-200 rounded-lg bg-white font-mono text-green-900 focus:outline-none"
+                  />
+                  <Button
+                    variant="outline"
+                    className="shrink-0 border-green-300 text-green-700 hover:bg-green-100"
+                    onClick={() => {
+                      navigator.clipboard.writeText(linkVistoriaEntrega).then(() => {
+                        setLinkEntregaCopiado(true)
+                        setTimeout(() => setLinkEntregaCopiado(false), 2000)
+                      }).catch(() => {})
+                    }}
+                  >
+                    {linkEntregaCopiado ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : 'Copiar'}
+                  </Button>
+                </div>
+              </div>
+
+              <button onClick={() => setTipoSelecionado(null)} className="w-full flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Escolher outro tipo
+              </button>
             </div>
           </div>
         </div>
@@ -1864,7 +1976,12 @@ export default function MovimentacaoPage() {
                       </ul>
                     </div>
 
-                    {videoAvarias ? (
+                    {comprimindoVideo ? (
+                      <div className="w-full h-40 lg:h-52 border-2 border-dashed border-zinc-300 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                        <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+                        <span className="text-sm font-medium">Comprimindo vídeo...</span>
+                      </div>
+                    ) : videoAvarias ? (
                       <div className="relative">
                         <video src={videoAvarias} controls className="w-full rounded-xl border-2 border-green-300 max-h-72 lg:max-h-96" />
                         <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
@@ -1916,7 +2033,12 @@ export default function MovimentacaoPage() {
                       </ul>
                     </div>
 
-                    {videoDetalhes ? (
+                    {comprimindoVideo ? (
+                      <div className="w-full h-40 lg:h-52 border-2 border-dashed border-zinc-300 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                        <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+                        <span className="text-sm font-medium">Comprimindo vídeo...</span>
+                      </div>
+                    ) : videoDetalhes ? (
                       <div className="relative">
                         <video src={videoDetalhes} controls className="w-full rounded-xl border-2 border-green-300 max-h-72 lg:max-h-96" />
                         <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
@@ -1976,7 +2098,12 @@ export default function MovimentacaoPage() {
                     {violacaoRastreamento === true && (
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">Grave um vídeo mostrando o sistema violado:</p>
-                        {videoViolacao ? (
+                        {comprimindoVideo ? (
+                          <div className="w-full h-32 border-2 border-dashed border-zinc-300 rounded-xl flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                            <Loader2 className="w-6 h-6 animate-spin text-red-500" />
+                            <span className="text-xs font-medium">Comprimindo vídeo...</span>
+                          </div>
+                        ) : videoViolacao ? (
                           <div className="relative">
                             <video src={videoViolacao} controls className="w-full rounded-xl border-2 border-green-300 max-h-72 lg:max-h-96" />
                             <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
