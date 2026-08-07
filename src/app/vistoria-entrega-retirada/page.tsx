@@ -6,7 +6,7 @@ import { Camera, Video, Gauge, MapPin, CheckCircle2, AlertTriangle, ChevronLeft,
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { gerarPdfVistoriaEntrega } from '@/lib/gerar-pdf-vistoria'
-import { comprimirVideo } from '@/lib/comprimir-video'
+import { GravadorVideo } from '@/components/gravador-video'
 
 // Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -161,10 +161,7 @@ function VistoriaEntregaContent() {
   const fotoRef = useRef<HTMLInputElement>(null)
 
   // Etapa 3 - Video
-  const [videoAvarias, setVideoAvarias] = useState<string | null>(null)
   const [videoAvariasFile, setVideoAvariasFile] = useState<File | null>(null)
-  const [comprimindoVideo, setComprimindoVideo] = useState(false)
-  const videoRef = useRef<HTMLInputElement>(null)
 
   // Etapa 4 - KM
   const [km, setKm] = useState('')
@@ -299,7 +296,7 @@ function VistoriaEntregaContent() {
       case 0: return !!selfie && !validandoFacial
       case 1: return fotosCount === 4
       case 2: return true
-      case 3: return !!videoAvarias && !comprimindoVideo
+      case 3: return !!videoAvariasFile
       case 4: {
         if (!km) return false
         if (veiculoKm != null && Number(km) < veiculoKm) return false
@@ -323,25 +320,6 @@ function VistoriaEntregaContent() {
     const fotoId = FOTOS_ENTREGA[fotoAtualIdx].id
     setFotos(prev => ({ ...prev, [fotoId]: dataUrl }))
     if (fotoAtualIdx < 3) setFotoAtualIdx(fotoAtualIdx + 1)
-  }
-
-  async function onVideo(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setComprimindoVideo(true)
-    try {
-      const arquivo = await comprimirVideo(file)
-      const dataUrl = await readFileAsDataUrl(arquivo)
-      setVideoAvarias(dataUrl)
-      setVideoAvariasFile(arquivo)
-    } catch {
-      // Compressão falhou (ex: navegador sem suporte a MediaRecorder) — usa o original
-      const dataUrl = await readFileAsDataUrl(file)
-      setVideoAvarias(dataUrl)
-      setVideoAvariasFile(file)
-    } finally {
-      setComprimindoVideo(false)
-    }
   }
 
   function capturarLocalizacao() {
@@ -761,32 +739,9 @@ function VistoriaEntregaContent() {
                 <h2 className="text-xl font-bold text-white">Video de Avarias</h2>
                 <p className="text-sm text-white/60 mt-1">Grave um video mostrando possiveis avarias do veiculo.</p>
               </div>
-              {comprimindoVideo ? (
-                <div className="flex flex-col items-center gap-2 py-4">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#EC4899]" />
-                  <p className="text-sm text-white/60">Comprimindo video...</p>
-                </div>
-              ) : (
-                <>
-                  {videoAvarias && (
-                    <div className="w-full">
-                      <video src={videoAvarias} controls className="w-full rounded-2xl border border-white/20" />
-                    </div>
-                  )}
-                  <Button
-                    onClick={() => videoRef.current?.click()}
-                    className={
-                      videoAvarias
-                        ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]'
-                        : 'bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]'
-                    }
-                  >
-                    <Video className="w-4 h-4 mr-2" />
-                    {videoAvarias ? 'Gravar novamente' : 'Gravar Video'}
-                  </Button>
-                </>
-              )}
-              <input ref={videoRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={onVideo} />
+              <div className="w-full">
+                <GravadorVideo value={videoAvariasFile} onChange={setVideoAvariasFile} label="Gravar Video" variant="dark" />
+              </div>
             </div>
           </GradientBorderCard>
         )
