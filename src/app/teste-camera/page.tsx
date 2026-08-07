@@ -158,8 +158,9 @@ export default function TesteCameraPage() {
     )
   }
 
-  // Enquanto a câmera está ligada e ainda não tem resultado, trava a tela numa
-  // altura fixa (preview + botões) pra caber tudo junto sem precisar rolar
+  // Enquanto a câmera está ligada e ainda não tem resultado, esconde o resto
+  // da tela e limita o preview a uma fração da tela — sobra espaço garantido
+  // pros botões sem precisar calcular a altura exata do cabeçalho do app
   const modoCaptura = cameraAtiva && !resultado
 
   return (
@@ -169,7 +170,7 @@ export default function TesteCameraPage() {
         description="Laboratório isolado, não usado em nenhuma vistoria ainda"
         icon={<VideoIcon className="w-5 h-5 text-white" />}
       />
-      <div className={`px-4 sm:px-6 py-4 max-w-2xl mx-auto flex flex-col gap-4 ${modoCaptura ? 'h-[calc(100dvh-64px)]' : ''}`}>
+      <div className="px-4 sm:px-6 py-4 max-w-2xl mx-auto flex flex-col gap-4">
 
         {!cameraAtiva && (
           <>
@@ -226,7 +227,7 @@ export default function TesteCameraPage() {
         )}
 
         {/* Preview */}
-        <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'flex-1 min-h-0' : 'h-64'}`}>
+        <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'h-[42vh]' : 'h-64'}`}>
           <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
           {!cameraAtiva && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/70 text-sm">
