@@ -158,6 +158,10 @@ export default function TesteCameraPage() {
     )
   }
 
+  // Enquanto a câmera está ligada e ainda não tem resultado, trava a tela numa
+  // altura fixa (preview + botões) pra caber tudo junto sem precisar rolar
+  const modoCaptura = cameraAtiva && !resultado
+
   return (
     <>
       <PageHeader
@@ -165,100 +169,105 @@ export default function TesteCameraPage() {
         description="Laboratório isolado, não usado em nenhuma vistoria ainda"
         icon={<VideoIcon className="w-5 h-5 text-white" />}
       />
-      <div className="px-4 sm:px-6 py-6 max-w-2xl mx-auto space-y-6">
+      <div className={`px-4 sm:px-6 py-4 max-w-2xl mx-auto flex flex-col gap-4 ${modoCaptura ? 'h-[calc(100dvh-64px)]' : ''}`}>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-          Essa tela é só pra testar gravação com resolução/bitrate limitados desde o começo,
-          em vez de comprimir depois. Nada aqui é enviado pra lugar nenhum.
-        </div>
-
-        {/* Configurações */}
-        <div className="bg-white border rounded-xl p-4 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Resolução pedida</label>
-            <div className="grid grid-cols-3 gap-2">
-              {RESOLUCOES.map((r) => (
-                <button
-                  key={r.label}
-                  disabled={cameraAtiva}
-                  onClick={() => setResolucao(r)}
-                  className={`py-2.5 rounded-lg text-sm font-medium border transition-all disabled:opacity-40 ${
-                    resolucao.label === r.label
-                      ? 'bg-[#1B2043] text-white border-[#1B2043]'
-                      : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
+        {!cameraAtiva && (
+          <>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+              Essa tela é só pra testar gravação com resolução/bitrate limitados desde o começo,
+              em vez de comprimir depois. Nada aqui é enviado pra lugar nenhum.
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Bitrate</label>
-            <div className="grid grid-cols-4 gap-2">
-              {BITRATES.map((b) => (
-                <button
-                  key={b.label}
-                  disabled={gravando}
-                  onClick={() => setBitrate(b)}
-                  className={`py-2.5 rounded-lg text-xs font-medium border transition-all disabled:opacity-40 ${
-                    bitrate.label === b.label
-                      ? 'bg-[#1B2043] text-white border-[#1B2043]'
-                      : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
-                  }`}
-                >
-                  {b.label}
-                </button>
-              ))}
+            {/* Configurações */}
+            <div className="bg-white border rounded-xl p-4 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Resolução pedida</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {RESOLUCOES.map((r) => (
+                    <button
+                      key={r.label}
+                      onClick={() => setResolucao(r)}
+                      className={`py-2.5 rounded-lg text-sm font-semibold border-2 transition-all ${
+                        resolucao.label === r.label
+                          ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md scale-[1.03]'
+                          : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Bitrate</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {BITRATES.map((b) => (
+                    <button
+                      key={b.label}
+                      onClick={() => setBitrate(b)}
+                      className={`py-2.5 rounded-lg text-xs font-semibold border-2 transition-all ${
+                        bitrate.label === b.label
+                          ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md scale-[1.03]'
+                          : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
+                      }`}
+                    >
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {erro && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{erro}</div>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 shrink-0">{erro}</div>
         )}
 
         {/* Preview */}
-        <div className="bg-black rounded-xl overflow-hidden relative">
-          <video ref={previewRef} muted playsInline className="w-full max-h-[420px] object-contain" />
+        <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'flex-1 min-h-0' : 'h-64'}`}>
+          <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
           {!cameraAtiva && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/70 text-sm">
               Câmera desligada
             </div>
           )}
           {gravando && (
-            <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-              <Circle className="w-2 h-2 fill-white" /> {segundos}s
+            <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg">
+              <Circle className="w-2 h-2 fill-white animate-pulse" /> {segundos}s
+            </div>
+          )}
+          {ajusteReal && (
+            <div className="absolute top-3 right-3 bg-black/60 text-white/90 text-[11px] font-mono px-2 py-1 rounded-full">
+              {ajusteReal.width}×{ajusteReal.height}
             </div>
           )}
         </div>
 
-        {ajusteReal && (
-          <p className="text-xs text-muted-foreground text-center">
-            Resolução real concedida pelo navegador: <strong>{ajusteReal.width}×{ajusteReal.height}</strong>
-            {' '}(pedido: {resolucao.width}×{resolucao.height})
-          </p>
-        )}
-
         {/* Controles */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           {!cameraAtiva ? (
-            <Button className="flex-1 gap-2 h-12" onClick={iniciarCamera}>
-              <Camera className="w-4 h-4" /> Ligar câmera
+            <Button className="flex-1 gap-2 h-14 text-base font-bold shadow-md" onClick={iniciarCamera}>
+              <Camera className="w-5 h-5" /> Ligar câmera
             </Button>
           ) : (
             <>
-              <Button variant="outline" className="gap-2 h-12" onClick={pararCamera} disabled={gravando}>
-                <RotateCcw className="w-4 h-4" /> Desligar
+              <Button
+                variant="outline"
+                className="gap-2 h-14 px-4 border-2"
+                onClick={pararCamera}
+                disabled={gravando}
+              >
+                <RotateCcw className="w-5 h-5" />
               </Button>
               {!gravando ? (
-                <Button className="flex-1 gap-2 h-12 bg-red-600 hover:bg-red-700" onClick={iniciarGravacao}>
-                  <Circle className="w-4 h-4" /> Gravar
+                <Button className="flex-1 gap-2 h-14 text-base font-bold bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/30" onClick={iniciarGravacao}>
+                  <Circle className="w-5 h-5 fill-white" /> Gravar
                 </Button>
               ) : (
-                <Button className="flex-1 gap-2 h-12 bg-zinc-800 hover:bg-zinc-900" onClick={pararGravacao}>
-                  <Square className="w-4 h-4" /> Parar
+                <Button className="flex-1 gap-2 h-14 text-base font-bold bg-zinc-900 hover:bg-zinc-800 shadow-md" onClick={pararGravacao}>
+                  <Square className="w-5 h-5 fill-white" /> Parar
                 </Button>
               )}
             </>
@@ -267,7 +276,7 @@ export default function TesteCameraPage() {
 
         {/* Resultado */}
         {resultado && (
-          <div className="bg-white border rounded-xl p-4 space-y-3">
+          <div className="bg-white border rounded-xl p-4 space-y-3 shrink-0">
             <p className="text-sm font-semibold">Resultado da gravação</p>
             <video src={resultado.url} controls className="w-full rounded-lg border" />
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -284,11 +293,16 @@ export default function TesteCameraPage() {
                 <p className="text-sm font-bold">{resultado.mimeType.split(';')[0].split('/')[1]}</p>
               </div>
             </div>
-            <a href={resultado.url} download={`teste-camera.${resultado.mimeType.includes('mp4') ? 'mp4' : 'webm'}`}>
-              <Button variant="outline" className="w-full gap-2">
-                <Download className="w-4 h-4" /> Baixar vídeo
+            <div className="flex gap-2">
+              <a href={resultado.url} download={`teste-camera.${resultado.mimeType.includes('mp4') ? 'mp4' : 'webm'}`} className="flex-1">
+                <Button variant="outline" className="w-full gap-2">
+                  <Download className="w-4 h-4" /> Baixar vídeo
+                </Button>
+              </a>
+              <Button variant="outline" className="gap-2" onClick={() => { URL.revokeObjectURL(resultado.url); setResultado(null) }}>
+                Gravar de novo
               </Button>
-            </a>
+            </div>
           </div>
         )}
       </div>
