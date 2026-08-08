@@ -417,11 +417,6 @@ export async function gerarPdfVistoriaEntrega(dados: DadosVistoriaEntregaPDF): P
     : 'Não disponível'
   y = drawField(doc, 'Localização:', locText, leftX, y, contentW)
 
-  // Vídeo
-  if (dados.videoUrl) {
-    y = drawField(doc, 'Vídeo:', dados.videoUrl, leftX, y, contentW, dados.videoUrl)
-  }
-
   // Selfie
   if (selfieComprimida) {
     y += 4
