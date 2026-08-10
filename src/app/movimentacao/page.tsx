@@ -335,6 +335,7 @@ export default function MovimentacaoPage() {
     setErroSolicitacao('')
     try {
       const veiculoId = (veiculoFuncoes as { _id?: string } | null)?._id ?? ''
+      const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
       const fotoUrl = foto ? await uploadArquivo(foto) : ''
       const data = await chamarBubble('registrar-solicitacao-base', {
         data: String(Date.now()),
@@ -342,6 +343,7 @@ export default function MovimentacaoPage() {
         descricao,
         tipo,
         motivo,
+        user: user?._id ?? '',
         ...(fotoUrl ? { foto: fotoUrl } : {}),
         ...(km ? { km } : {}),
       })
@@ -708,7 +710,7 @@ export default function MovimentacaoPage() {
 
       setEtapaEnvio('vistoria')
 
-      const sn = (...vals: (boolean | null)[]) => vals.some(v => v === true) ? 'SIM' : 'NÃO'
+      const sn = (val: boolean | null) => val === true ? 'SIM' : 'NÃO'
       const body = {
         PLACA: placa.trim().toUpperCase(),
         KM: kmDevolucao,
@@ -717,10 +719,16 @@ export default function MovimentacaoPage() {
         VIDEO: videoDetalhesUrl,
         CONTRATO: (veiculoFuncoes?.contrato as { _id?: string } | undefined)?._id ?? '',
         'VIDEO-2': videoAvariasUrl,
+        MANUTENCAO: sn(perguntasDevolucao.manutencaoEstetica),
+        PNEUS: sn(perguntasDevolucao.pneusMalEstado),
         VAZAMENTO: sn(perguntasDevolucao.vazamentoOleo),
-        OLEO: sn(perguntasDevolucao.fumandoEscapamento),
+        LIGANDO: sn(perguntasDevolucao.motoLigando),
+        FUMACA: sn(perguntasDevolucao.fumandoEscapamento),
+        FALHANDO: sn(perguntasDevolucao.falhando),
+        VALVULA: sn(perguntasDevolucao.batendoValvula),
+        CANO: sn(perguntasDevolucao.canoAdulterado),
         FILTRO: sn(perguntasDevolucao.semFiltroAr),
-        ESCAPAMENTO: sn(perguntasDevolucao.fumandoEscapamento, perguntasDevolucao.canoAdulterado),
+        VIOLACAO: sn(violacaoRastreamento),
         NOME: String(user?.Nome ?? user?.nome ?? ''),
         USER: String(user?.user ?? ''),
       }
@@ -795,6 +803,7 @@ export default function MovimentacaoPage() {
 
       setEtapaEnvio('vistoria')
 
+      const sn = (val: boolean | null) => val === true ? 'SIM' : 'NÃO'
       const body = omitirVazios({
         PLACA_ANTIGA: placa.trim().toUpperCase(),
         KM_ANTIGA: kmDevolucao,
@@ -809,6 +818,16 @@ export default function MovimentacaoPage() {
         TXT: modo,
         MSG: registroTexto,
         ONDE: 'MOTO-ANTIGA',
+        MANUTENCAO: sn(perguntasDevolucao.manutencaoEstetica),
+        PNEUS: sn(perguntasDevolucao.pneusMalEstado),
+        VAZAMENTO: sn(perguntasDevolucao.vazamentoOleo),
+        LIGANDO: sn(perguntasDevolucao.motoLigando),
+        FUMACA: sn(perguntasDevolucao.fumandoEscapamento),
+        FALHANDO: sn(perguntasDevolucao.falhando),
+        VALVULA: sn(perguntasDevolucao.batendoValvula),
+        CANO: sn(perguntasDevolucao.canoAdulterado),
+        FILTRO: sn(perguntasDevolucao.semFiltroAr),
+        VIOLACAO: sn(violacaoRastreamento),
         NOME: String(user?.Nome ?? user?.nome ?? ''),
         USER: String(user?.user ?? ''),
       })
@@ -1438,9 +1457,11 @@ export default function MovimentacaoPage() {
                       className="w-full px-3 py-2.5 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-purple-500/30"
                     >
                       <option value="" disabled>Selecione um status</option>
-                      {statusOpcoes.map((status) => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
+                      {statusOpcoes
+                        .filter((status) => status.trim().toUpperCase() !== String(veiculoFuncoes?.status_veiculo_desc ?? '').trim().toUpperCase())
+                        .map((status) => (
+                          <option key={status} value={status}>{status}</option>
+                        ))}
                     </select>
                   )}
                 </div>
