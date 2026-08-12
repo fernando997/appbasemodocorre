@@ -678,7 +678,9 @@ export default function MovimentacaoPage() {
       const pdfBlob = await gerarPdfVistoria({
         placa: placa.trim().toUpperCase(),
         km: kmDevolucao,
-        contrato: veiculoFuncoes?.contrato ? String(veiculoFuncoes.contrato) : undefined,
+        contrato: (veiculoFuncoes?.contrato as { 'Numero ctr'?: number } | undefined)?.['Numero ctr'] != null
+          ? String((veiculoFuncoes?.contrato as { 'Numero ctr'?: number })['Numero ctr'])
+          : undefined,
         cliente: clienteInfo?.nome_completo ? String(clienteInfo.nome_completo) : undefined,
         vistoriadorNome: String(user?.Nome ?? user?.nome ?? ''),
         vistoriadorCpf: String(user?.cpf ?? user?.CPF ?? ''),
@@ -766,7 +768,7 @@ export default function MovimentacaoPage() {
       const pdfAntigaBlob = await gerarPdfVistoria({
         placa: placa.trim().toUpperCase(),
         km: kmDevolucao,
-        contrato: contratoId || undefined,
+        contrato: numeroContrato ? String(numeroContrato) : undefined,
         cliente: clienteInfo?.nome_completo ? String(clienteInfo.nome_completo) : undefined,
         vistoriadorNome: String(user?.Nome ?? user?.nome ?? ''),
         vistoriadorCpf: String(user?.cpf ?? user?.CPF ?? ''),
@@ -1012,7 +1014,7 @@ export default function MovimentacaoPage() {
     try {
       const data = await chamarBubble('consulta-veiculo-funcoes', { placa: placaValue.trim().toUpperCase() })
       const vistoriasRaw: Record<string, unknown>[] = data.response?.vistorias ?? []
-      setVeiculoFuncoes(data.response?.veiculo ? { ...data.response.veiculo, contrato: data.response.contrato } : null)
+      setVeiculoFuncoes(data.response?.veiculo ? { ...data.response.veiculo, contrato: data.response.contrato, cliente: data.response.cliente } : null)
       setVistoriasDisponiveis(vistoriasRaw.map((v) => v.nome as string))
       setVistoriasIncluir(data.response?.['vistorias-incluir'] ?? [])
       setVistoriasRetirar(data.response?.['vistorias-retirar'] ?? [])
