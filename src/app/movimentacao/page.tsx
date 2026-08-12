@@ -831,7 +831,7 @@ export default function MovimentacaoPage() {
         FILTRO: sn(perguntasDevolucao.semFiltroAr),
         VIOLACAO: sn(violacaoRastreamento),
         NOME: String(user?.Nome ?? user?.nome ?? ''),
-        USER: String(user?.user ?? ''),
+        USER: String(user?.cpf ?? ''),
       })
 
       const endpointFinal = modo === 'RETIRAR' ? 'base-vitoria-sub-retirar' : 'base_vistoria_nova_sub'
@@ -898,7 +898,7 @@ export default function MovimentacaoPage() {
         nivel_comb: combustivelDisponibilidade,
         video: videoUrl,
         NOME: String(user?.Nome ?? user?.nome ?? ''),
-        USER: String(user?.user ?? ''),
+        USER: String(user?.cpf ?? ''),
       }
 
       await chamarBubble('base_vistoria_disponibilidade', body, 'json')
