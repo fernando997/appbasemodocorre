@@ -12,6 +12,8 @@ interface DadosVistoriaPDF {
   perguntas: { label: string; resposta: boolean | null }[]
   violacaoRastreamento: boolean | null
   observacao?: string
+  localizacao?: { lat: number; lng: number } | 'negado' | null
+  videos?: { label: string; url: string }[]
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -102,6 +104,12 @@ async function obterEndereco(lat: number, lng: number): Promise<string> {
   }
 }
 
+async function textoLocalizacao(localizacao: { lat: number; lng: number } | 'negado' | null | undefined): Promise<string> {
+  if (localizacao === 'negado') return 'Usuário negou o compartilhamento de localização'
+  if (!localizacao) return 'Não disponível'
+  return obterEndereco(localizacao.lat, localizacao.lng)
+}
+
 function drawField(doc: jsPDF, label: string, value: unknown, x: number, y: number, w: number, url?: string) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
@@ -121,8 +129,13 @@ function drawField(doc: jsPDF, label: string, value: unknown, x: number, y: numb
   doc.rect(x, boxY, w, boxH)
 
   if (url) {
+    // doc.textWithLink() só aceita string única — se o texto quebrar em várias
+    // linhas (link comprido), precisa chamar uma vez por linha, senão o jsPDF
+    // quebra com "t.charCodeAt is not a function" ao receber um array
     doc.setTextColor(37, 99, 235)
-    doc.textWithLink(lines, x + 3, boxY + 7, { url })
+    lines.forEach((line: string, i: number) => {
+      doc.textWithLink(line, x + 3, boxY + 7 + i * lineH, { url })
+    })
   } else {
     doc.text(lines, x + 3, boxY + 7)
   }
@@ -223,6 +236,16 @@ export async function gerarPdfVistoria(dados: DadosVistoriaPDF): Promise<Blob> {
 
   // Linha 5: WhatsApp do Vistoriador (full width)
   y = drawField(doc, 'WhatsApp do Vistoriador:', dados.vistoriadorWhatsapp || '-', leftX, y, contentW)
+
+  // Localização
+  const locText = await textoLocalizacao(dados.localizacao)
+  y = drawField(doc, 'Localização da Vistoria:', locText, leftX, y, contentW)
+
+  // Vídeos
+  for (const video of dados.videos ?? []) {
+    if (!video.url) continue
+    y = drawField(doc, `${video.label}:`, video.url, leftX, y, contentW, video.url)
+  }
 
   // Primeira foto na página 1
   const foto1 = fotosComprimidas[0]
@@ -369,7 +392,7 @@ interface DadosVistoriaEntregaPDF {
   km: string
   selfieDataUrl: string | null
   fotos: { label: string; dataUrl: string | null }[]
-  geoLocation: { lat: number; lng: number } | null
+  geoLocation: { lat: number; lng: number } | 'negado' | null
   videoUrl?: string
 }
 
@@ -412,10 +435,13 @@ export async function gerarPdfVistoriaEntrega(dados: DadosVistoriaEntregaPDF): P
   drawField(doc, 'Data e Hora:', dataHora, rightX, yBeforeKm, halfW)
 
   // Localização
-  const locText = dados.geoLocation
-    ? await obterEndereco(dados.geoLocation.lat, dados.geoLocation.lng)
-    : 'Não disponível'
+  const locText = await textoLocalizacao(dados.geoLocation)
   y = drawField(doc, 'Localização:', locText, leftX, y, contentW)
+
+  // Vídeo
+  if (dados.videoUrl) {
+    y = drawField(doc, 'Vídeo da Vistoria:', dados.videoUrl, leftX, y, contentW, dados.videoUrl)
+  }
 
   // Selfie
   if (selfieComprimida) {

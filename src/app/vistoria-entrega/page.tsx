@@ -143,7 +143,7 @@ function VistoriaEntregaContent() {
   const [kmErro, setKmErro] = useState('')
 
   // Etapa 5 - Geolocation
-  const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number } | 'negado' | null>(null)
   const [geoErro, setGeoErro] = useState('')
   const [geoCarregando, setGeoCarregando] = useState(false)
 
@@ -339,7 +339,11 @@ function VistoriaEntregaContent() {
         setGeoCarregando(false)
       },
       (err) => {
-        setGeoErro(`Erro ao obter localizacao: ${err.message}`)
+        if (err.code === err.PERMISSION_DENIED) {
+          setGeoLocation('negado')
+        } else {
+          setGeoErro(`Erro ao obter localizacao: ${err.message}`)
+        }
         setGeoCarregando(false)
       },
       { enableHighAccuracy: true, timeout: 15000 }
@@ -356,13 +360,16 @@ function VistoriaEntregaContent() {
           localizacaoAtual = await new Promise<{ lat: number; lng: number }>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
               (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-              () => reject(),
+              (err) => reject(err),
               { enableHighAccuracy: true, timeout: 10000 }
             )
           })
           setGeoLocation(localizacaoAtual)
-        } catch {
-          // best-effort
+        } catch (err) {
+          if (err instanceof GeolocationPositionError && err.code === err.PERMISSION_DENIED) {
+            localizacaoAtual = 'negado'
+            setGeoLocation('negado')
+          }
         }
       }
 
@@ -800,10 +807,15 @@ function VistoriaEntregaContent() {
                 <h2 className="text-xl font-bold text-white">Localizacao</h2>
                 <p className="text-sm text-white/60 mt-1">Precisamos da sua localizacao para registrar a vistoria.</p>
               </div>
-              {geoLocation ? (
+              {geoLocation && geoLocation !== 'negado' ? (
                 <div className="bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-xl p-4 text-center w-full">
                   <CheckCircle2 className="w-6 h-6 text-[#22C55E] mx-auto mb-2" />
                   <p className="text-sm font-mono text-white/80">{geoLocation.lat.toFixed(6)}, {geoLocation.lng.toFixed(6)}</p>
+                </div>
+              ) : geoLocation === 'negado' ? (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center w-full">
+                  <AlertTriangle className="w-6 h-6 text-red-400 mx-auto mb-2" />
+                  <p className="text-sm text-red-300">Localização negada — isso vai constar no PDF da vistoria.</p>
                 </div>
               ) : geoCarregando ? (
                 <div className="flex flex-col items-center gap-2">

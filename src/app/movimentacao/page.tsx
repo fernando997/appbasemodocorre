@@ -411,6 +411,7 @@ export default function MovimentacaoPage() {
   })
   const [observacaoDevolucao, setObservacaoDevolucao] = useState('')
   const [kmDevolucao, setKmDevolucao] = useState('')
+  const [geoLocationDevolucao, setGeoLocationDevolucao] = useState<{ lat: number; lng: number } | 'negado' | null>(null)
 
   // Substituição — fases: 1º foto da placa nova, depois vistoria da antiga, depois dados da nova
   const [subFase, setSubFase] = useState<'placa' | 'antiga'>('placa')
@@ -530,6 +531,7 @@ export default function MovimentacaoPage() {
     setPerguntasDevolucao({ manutencaoEstetica: null, pneusMalEstado: null, vazamentoOleo: null, motoLigando: null, fumandoEscapamento: null, falhando: null, batendoValvula: null, canoAdulterado: null, semFiltroAr: null })
     setObservacaoDevolucao('')
     setKmDevolucao('')
+    setGeoLocationDevolucao(null)
   }
 
   function resetSubNova() {
@@ -646,6 +648,21 @@ export default function MovimentacaoPage() {
     }
   }
 
+  async function capturarLocalizacaoAtual(): Promise<{ lat: number; lng: number } | 'negado' | null> {
+    try {
+      return await new Promise<{ lat: number; lng: number }>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 10000 }
+        )
+      })
+    } catch (err) {
+      const negado = err instanceof GeolocationPositionError && err.code === err.PERMISSION_DENIED
+      return negado ? 'negado' : null
+    }
+  }
+
   async function uploadArquivo(file: File): Promise<string> {
     const form = new FormData()
     form.append('foto', file, file.name)
@@ -674,6 +691,15 @@ export default function MovimentacaoPage() {
     try {
       const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
 
+      // Localização do dispositivo no momento da vistoria
+      const localizacaoAtual = geoLocationDevolucao ?? await capturarLocalizacaoAtual()
+      if (localizacaoAtual) setGeoLocationDevolucao(localizacaoAtual)
+
+      // Upload dos vídeos primeiro, pra poder linkar no PDF
+      const videoDetalhesUrl = videoDetalhesFile ? await uploadArquivo(videoDetalhesFile) : ''
+      const videoAvariasUrl = videoAvariasFile ? await uploadArquivo(videoAvariasFile) : ''
+      const videoViolacaoUrl = videoViolacaoFile ? await uploadArquivo(videoViolacaoFile) : ''
+
       // Gerar PDF da vistoria
       const pdfBlob = await gerarPdfVistoria({
         placa: placa.trim().toUpperCase(),
@@ -701,14 +727,18 @@ export default function MovimentacaoPage() {
         ],
         violacaoRastreamento,
         observacao: observacaoDevolucao,
+        localizacao: localizacaoAtual,
+        videos: [
+          { label: 'Vídeo de Detalhes', url: videoDetalhesUrl },
+          { label: 'Vídeo de Avarias', url: videoAvariasUrl },
+          { label: 'Vídeo de Violação do Rastreamento', url: videoViolacaoUrl },
+        ],
       })
 
-      // Upload dos arquivos (PDF + vídeos)
+      // Upload do PDF
       const pdfUrl = await uploadArquivo(
         new File([pdfBlob], `VISTORIA-DEVOLUCAO-${placa.trim().toUpperCase()}.pdf`, { type: 'application/pdf' })
       )
-      const videoDetalhesUrl = videoDetalhesFile ? await uploadArquivo(videoDetalhesFile) : ''
-      const videoAvariasUrl = videoAvariasFile ? await uploadArquivo(videoAvariasFile) : ''
 
       setEtapaEnvio('vistoria')
 
@@ -721,6 +751,7 @@ export default function MovimentacaoPage() {
         VIDEO: videoDetalhesUrl,
         CONTRATO: (veiculoFuncoes?.contrato as { _id?: string } | undefined)?._id ?? '',
         'VIDEO-2': videoAvariasUrl,
+        'VIDEO-3': videoViolacaoUrl,
         MANUTENCAO: sn(perguntasDevolucao.manutencaoEstetica),
         PNEUS: sn(perguntasDevolucao.pneusMalEstado),
         VAZAMENTO: sn(perguntasDevolucao.vazamentoOleo),
@@ -764,6 +795,14 @@ export default function MovimentacaoPage() {
       const contratoId = contratoObj?._id ?? ''
       const numeroContrato = contratoObj?.['Numero ctr'] ?? ''
 
+      // Localização do dispositivo no momento da vistoria
+      const localizacaoAtual = geoLocationDevolucao ?? await capturarLocalizacaoAtual()
+      if (localizacaoAtual) setGeoLocationDevolucao(localizacaoAtual)
+
+      // Upload do vídeo da moto ANTIGA primeiro, pra poder linkar no PDF
+      const videoAntigaUrl = videoAvariasFile ? await uploadArquivo(videoAvariasFile) : ''
+      const videoViolacaoUrl = videoViolacaoFile ? await uploadArquivo(videoViolacaoFile) : ''
+
       // PDF da moto ANTIGA (saindo) — mesmo formato da Devolução
       const pdfAntigaBlob = await gerarPdfVistoria({
         placa: placa.trim().toUpperCase(),
@@ -789,13 +828,17 @@ export default function MovimentacaoPage() {
         ],
         violacaoRastreamento,
         observacao: observacaoDevolucao,
+        localizacao: localizacaoAtual,
+        videos: [
+          { label: 'Vídeo de Avarias', url: videoAntigaUrl },
+          { label: 'Vídeo de Violação do Rastreamento', url: videoViolacaoUrl },
+        ],
       })
 
-      // Upload do PDF + vídeo da moto ANTIGA (a moto nova é enviada pelo cliente, na outra tela)
+      // Upload do PDF (a moto nova é enviada pelo cliente, na outra tela)
       const pdfAntigaUrl = await uploadArquivo(
         new File([pdfAntigaBlob], `VISTORIA-SUB-ANTIGA-${placa.trim().toUpperCase()}.pdf`, { type: 'application/pdf' })
       )
-      const videoAntigaUrl = videoAvariasFile ? await uploadArquivo(videoAvariasFile) : ''
 
       // Verifica se o cliente já terminou a vistoria da moto nova (ou se esta
       // é a primeira ponta a terminar) — o Bubble decide o tratamento
@@ -812,6 +855,7 @@ export default function MovimentacaoPage() {
         PDF_ANTIGA: pdfAntigaUrl,
         TIPO: 'SUBSTITUIÇÃO',
         VIDEO_ANTIGA: videoAntigaUrl,
+        VIDEO_ANTIGA_VIOLACAO: videoViolacaoUrl,
         CONTRATO: numeroContrato,
         PLACA_NOVA: placaNovaSub.trim().toUpperCase(),
         KM_NOVA: '',
@@ -1559,6 +1603,10 @@ export default function MovimentacaoPage() {
                         const contratoObj = veiculoFuncoes?.contrato as { 'Numero ctr'?: number } | undefined
                         const numeroContrato = contratoObj?.['Numero ctr'] ?? ''
                         setLinkVistoriaEntrega(`${window.location.origin}/vistoria-entrega?placa=${placa.trim().toUpperCase()}&contrato=${numeroContrato}`)
+                      }
+                      if (tipo === 'DEVOLUÇÃO' || tipo === 'SUBSTITUIÇÃO') {
+                        // Pede a permissão de localização já no início, pra não travar o envio no final
+                        capturarLocalizacaoAtual().then(loc => { if (loc) setGeoLocationDevolucao(loc) })
                       }
                       setTipoSelecionado(tipo)
                     }}
