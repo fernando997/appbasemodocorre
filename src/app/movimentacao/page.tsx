@@ -52,11 +52,22 @@ const INSTRUCOES_VIDEO = [
 ]
 
 const FOTOS_DEVOLUCAO = [
-  { id: 'frente', label: 'Foto da Frente' },
-  { id: 'ladoDireito', label: 'Lado Direito (lado do escapamento)' },
-  { id: 'traseira', label: 'Foto da Traseira' },
-  { id: 'ladoEsquerdo', label: 'Lado Esquerdo (lado do pesinho)' },
+  { id: 'dianteira', label: 'Foto Dianteira da Moto' },
+  { id: 'pneuDianteiro', label: 'Foto Pneu Dianteiro' },
+  { id: 'rodaDianteira', label: 'Foto Roda Dianteira' },
+  { id: 'lateralDireita', label: 'Foto Lateral Direita' },
+  { id: 'traseira', label: 'Foto Traseira' },
+  { id: 'pneuTraseiro', label: 'Foto Pneu Traseiro' },
+  { id: 'rodaTraseira', label: 'Foto Roda Traseira' },
+  { id: 'lateralEsquerda', label: 'Foto Lateral Esquerda' },
+  { id: 'banco', label: 'Foto do Banco' },
+  { id: 'tanque', label: 'Foto do Tanque' },
+  { id: 'painel', label: 'Foto do Painel' },
+  { id: 'km', label: 'Foto do KM' },
+  { id: 'retrovisores', label: 'Foto dos Retrovisores' },
 ] as const
+
+const FOTOS_DEVOLUCAO_INICIAL = Object.fromEntries(FOTOS_DEVOLUCAO.map(f => [f.id, null]))
 
 const PERGUNTAS_MOTOR_LIGADO = [
   { id: 'fumandoEscapamento', label: 'Está fumando pelo escapamento?' },
@@ -396,8 +407,8 @@ export default function MovimentacaoPage() {
   const [vistoriaSucesso, setVistoriaSucesso] = useState(false)
   // Devolução
   const [etapaDevolucao, setEtapaDevolucao] = useState(0)
-  const [fotosDevolucao, setFotosDevolucao] = useState<Record<string, string | null>>({ frente: null, ladoDireito: null, traseira: null, ladoEsquerdo: null })
-  const [fotosDevolucaoFiles, setFotosDevolucaoFiles] = useState<Record<string, File | null>>({ frente: null, ladoDireito: null, traseira: null, ladoEsquerdo: null })
+  const [fotosDevolucao, setFotosDevolucao] = useState<Record<string, string | null>>(FOTOS_DEVOLUCAO_INICIAL)
+  const [fotosDevolucaoFiles, setFotosDevolucaoFiles] = useState<Record<string, File | null>>(FOTOS_DEVOLUCAO_INICIAL)
   const [videoAvarias, setVideoAvarias] = useState<string | null>(null)
   const [videoAvariasFile, setVideoAvariasFile] = useState<File | null>(null)
   const [videoDetalhes, setVideoDetalhes] = useState<string | null>(null)
@@ -522,8 +533,8 @@ export default function MovimentacaoPage() {
 
   function resetDevolucao() {
     setEtapaDevolucao(0)
-    setFotosDevolucao({ frente: null, ladoDireito: null, traseira: null, ladoEsquerdo: null })
-    setFotosDevolucaoFiles({ frente: null, ladoDireito: null, traseira: null, ladoEsquerdo: null })
+    setFotosDevolucao(FOTOS_DEVOLUCAO_INICIAL)
+    setFotosDevolucaoFiles(FOTOS_DEVOLUCAO_INICIAL)
     setVideoAvarias(null); setVideoAvariasFile(null)
     setVideoDetalhes(null); setVideoDetalhesFile(null)
     setViolacaoRastreamento(null)
@@ -1975,9 +1986,9 @@ export default function MovimentacaoPage() {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Tire as 4 fotos da moto:</p>
+                      <p className="text-sm font-medium">Tire as {FOTOS_DEVOLUCAO.length} fotos da moto:</p>
                       <Badge variant="outline" className={`text-xs ${todasFotosDevOk ? 'bg-green-50 text-green-700 border-green-200' : ''}`}>
-                        {fotosDevCount}/4 fotos
+                        {fotosDevCount}/{FOTOS_DEVOLUCAO.length} fotos
                       </Badge>
                     </div>
 
