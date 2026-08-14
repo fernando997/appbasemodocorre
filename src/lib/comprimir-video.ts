@@ -1,11 +1,13 @@
 // Recomprime um vídeo no navegador (redesenha os frames num canvas menor e regrava
 // com MediaRecorder) — necessário porque o Vercel limita o corpo das Serverless
 // Functions a ~4.5MB, e vídeo gravado direto da câmera do celular costuma passar
-// disso fácil. O bitrate é calculado a partir da duração do vídeo pra usar o máximo
-// de qualidade possível sem estourar o limite. Como o bitrate passado ao MediaRecorder
-// é uma média (o encoder pode picar acima dele em cenas com movimento), depois de
-// gravar checamos o tamanho real do blob e, se ainda estourar, regravamos com um
-// bitrate menor — em vez de confiar cegamente no cálculo prévio.
+// disso fácil. O bitrate passado ao MediaRecorder é só uma sugestão pro navegador,
+// não uma garantia — o encoder pode picar acima dele, e alguns navegadores nem
+// respeitam bem esse valor ao gravar um canvas (é pior que gravar a câmera direto).
+// Por isso: depois de gravar, sempre checamos o tamanho real do blob. Se estourar,
+// primeiro tentamos de novo com bitrate menor; se isso não for suficiente, reduzimos
+// também a resolução — que limita o tamanho de um jeito mais confiável, já que não
+// depende do encoder "obedecer" o bitrate pedido.
 type Opcoes = { maxWidth?: number; videoBitsPerSecond?: number }
 
 const TAMANHO_ALVO_BYTES = 3.5 * 1024 * 1024 // alvo do cálculo de bitrate
@@ -13,10 +15,11 @@ const TAMANHO_MAXIMO_BYTES = 4.3 * 1024 * 1024 // margem de segurança abaixo do
 const BITRATE_MINIMO = 150_000
 const BITRATE_MAXIMO = 4_000_000
 const DURACAO_PADRAO_S = 30 // fallback se não der pra descobrir a duração real
-const MAX_TENTATIVAS = 3
+const TENTATIVAS_POR_RESOLUCAO = 2 // reduzindo só o bitrate, antes de cair de resolução
+const LARGURAS_FALLBACK = [480, 360, 240] // usadas só se a largura inicial ainda estourar
 
 export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<File> {
-  const { maxWidth = 640 } = opcoes
+  const larguraInicial = opcoes.maxWidth ?? 640
   const url = URL.createObjectURL(file)
   const videoEl = document.createElement('video')
   videoEl.muted = true
@@ -29,22 +32,22 @@ export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<F
       videoEl.onerror = () => reject(new Error('Erro ao carregar vídeo'))
     })
 
-    const scale = Math.min(1, maxWidth / videoEl.videoWidth)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(videoEl.videoWidth * scale) || maxWidth
-    canvas.height = Math.round(videoEl.videoHeight * scale) || maxWidth
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('Canvas não suportado')
-
     const duracao = await obterDuracao(videoEl)
-    let videoBitsPerSecond = opcoes.videoBitsPerSecond ?? calcularBitrate(duracao)
+
+    // Só usa larguras menores que a inicial, na ordem certa
+    const larguras = [larguraInicial, ...LARGURAS_FALLBACK.filter(w => w < larguraInicial)]
 
     let blob: Blob | null = null
-    for (let tentativa = 0; tentativa < MAX_TENTATIVAS; tentativa++) {
-      blob = await gravar(videoEl, canvas, ctx, videoBitsPerSecond)
-      if (blob.size <= TAMANHO_MAXIMO_BYTES) break
-      // Bitrate real saiu maior que o previsto — reduz proporcionalmente ao excesso e tenta de novo
-      videoBitsPerSecond = Math.max(BITRATE_MINIMO, Math.round(videoBitsPerSecond * (TAMANHO_ALVO_BYTES / blob.size)))
+    resolucoes: for (const largura of larguras) {
+      const { canvas, ctx } = criarCanvas(videoEl, largura)
+      let videoBitsPerSecond = opcoes.videoBitsPerSecond ?? calcularBitrate(duracao)
+
+      for (let tentativa = 0; tentativa < TENTATIVAS_POR_RESOLUCAO; tentativa++) {
+        blob = await gravar(videoEl, canvas, ctx, videoBitsPerSecond)
+        if (blob.size <= TAMANHO_MAXIMO_BYTES) break resolucoes
+        // Bitrate real saiu maior que o previsto — reduz proporcionalmente ao excesso e tenta de novo
+        videoBitsPerSecond = Math.max(BITRATE_MINIMO, Math.round(videoBitsPerSecond * (TAMANHO_ALVO_BYTES / blob.size)))
+      }
     }
 
     const novoNome = file.name.replace(/\.\w+$/, '') + '.webm'
@@ -54,6 +57,16 @@ export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<F
   }
 }
 
+function criarCanvas(videoEl: HTMLVideoElement, maxWidth: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+  const scale = Math.min(1, maxWidth / videoEl.videoWidth)
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(videoEl.videoWidth * scale) || maxWidth
+  canvas.height = Math.round(videoEl.videoHeight * scale) || maxWidth
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas não suportado')
+  return { canvas, ctx }
+}
+
 function calcularBitrate(duracaoS: number): number {
   const bitrateCalculado = Math.round((TAMANHO_ALVO_BYTES * 8) / duracaoS)
   return Math.min(BITRATE_MAXIMO, Math.max(BITRATE_MINIMO, bitrateCalculado))
@@ -61,8 +74,8 @@ function calcularBitrate(duracaoS: number): number {
 
 // Em vídeos gravados pelo celular, videoEl.duration às vezes vem Infinity/NaN até
 // se buscar o fim do arquivo (bug conhecido do Chrome com certos containers). Sem
-// esse ajuste, o cálculo de bitrate usava o fallback fixo de 15s mesmo pra vídeos
-// bem mais longos, gerando arquivos muito maiores que o alvo.
+// esse ajuste, o cálculo de bitrate usava o fallback fixo mesmo pra vídeos bem mais
+// longos, gerando arquivos muito maiores que o alvo.
 function obterDuracao(videoEl: HTMLVideoElement): Promise<number> {
   if (Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
     return Promise.resolve(videoEl.duration)
