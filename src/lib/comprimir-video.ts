@@ -1,11 +1,18 @@
 // Recomprime um vídeo no navegador (redesenha os frames num canvas menor e regrava
-// com MediaRecorder em bitrate baixo) — necessário porque o Vercel limita o corpo
-// das Serverless Functions a ~4.5MB, e vídeo gravado direto da câmera do celular
-// costuma passar disso fácil.
+// com MediaRecorder) — necessário porque o Vercel limita o corpo das Serverless
+// Functions a ~4.5MB, e vídeo gravado direto da câmera do celular costuma passar
+// disso fácil. O bitrate é calculado a partir da duração do vídeo pra usar o máximo
+// de qualidade possível sem estourar o limite (em vez de um valor fixo baixo que só
+// era necessário pros vídeos mais longos).
 type Opcoes = { maxWidth?: number; videoBitsPerSecond?: number }
 
+const TAMANHO_ALVO_BYTES = 4 * 1024 * 1024 // margem de segurança abaixo dos ~4.5MB da Vercel
+const BITRATE_MINIMO = 250_000
+const BITRATE_MAXIMO = 4_000_000
+const DURACAO_PADRAO_S = 15 // fallback se videoEl.duration vier Infinity/NaN
+
 export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<File> {
-  const { maxWidth = 360, videoBitsPerSecond = 250_000 } = opcoes
+  const { maxWidth = 640 } = opcoes
 
   return new Promise((resolve, reject) => {
     const videoEl = document.createElement('video')
@@ -15,6 +22,13 @@ export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<F
     videoEl.src = url
 
     videoEl.onloadedmetadata = () => {
+      const duracao = Number.isFinite(videoEl.duration) && videoEl.duration > 0
+        ? videoEl.duration
+        : DURACAO_PADRAO_S
+      const bitrateCalculado = Math.round((TAMANHO_ALVO_BYTES * 8) / duracao)
+      const videoBitsPerSecond = opcoes.videoBitsPerSecond
+        ?? Math.min(BITRATE_MAXIMO, Math.max(BITRATE_MINIMO, bitrateCalculado))
+
       const scale = Math.min(1, maxWidth / videoEl.videoWidth)
       const canvas = document.createElement('canvas')
       canvas.width = Math.round(videoEl.videoWidth * scale) || maxWidth
