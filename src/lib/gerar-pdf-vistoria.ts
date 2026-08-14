@@ -190,7 +190,6 @@ function addPageNumber(doc: jsPDF, page: number, total: number) {
 export async function gerarPdfVistoria(dados: DadosVistoriaPDF): Promise<Blob> {
   const doc = new jsPDF('p', 'mm', 'a4')
   const pw = doc.internal.pageSize.getWidth() // 210
-  const ph = doc.internal.pageSize.getHeight() // 297
   const margin = 20
   const contentW = pw - margin * 2
   const halfW = (contentW - 6) / 2
@@ -200,7 +199,7 @@ export async function gerarPdfVistoria(dados: DadosVistoriaPDF): Promise<Blob> {
 
   const fotosComprimidas = await comprimirFotos(dados.fotos)
 
-  // ═══ PÁGINA 1: Cabeçalho + primeira foto ═══
+  // ═══ PÁGINA 1: Cabeçalho ═══
   let y = 20
   y = await drawLogo(doc, pw / 2, y)
 
@@ -247,16 +246,8 @@ export async function gerarPdfVistoria(dados: DadosVistoriaPDF): Promise<Blob> {
     y = drawField(doc, `${video.label}:`, video.url, leftX, y, contentW, video.url)
   }
 
-  // Primeira foto na página 1
-  const foto1 = fotosComprimidas[0]
-  if (foto1?.dataUrl) {
-    y += 4
-    const fotoH = Math.min(120, ph - y - 20)
-    y = drawPhotoWithBorder(doc, foto1.label.toUpperCase(), foto1.dataUrl, margin, y, contentW, fotoH)
-  }
-
   // ═══ PÁGINAS SEGUINTES: 2 fotos por página ═══
-  const remainingFotos = fotosComprimidas.slice(1).filter(f => f.dataUrl)
+  const remainingFotos = fotosComprimidas.filter(f => f.dataUrl)
   let fotoIndex = 0
 
   while (fotoIndex < remainingFotos.length) {
