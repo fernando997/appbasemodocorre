@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Camera, Circle, Square, Download, RotateCcw, Video as VideoIcon } from 'lucide-react'
+import { Camera, Circle, Square, Download, RotateCcw, Video as VideoIcon, ImageIcon } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 
 // Tela isolada só pra testar câmera própria (getUserMedia + MediaRecorder) com
 // resolução/bitrate limitados NA GRAVAÇÃO, em vez de comprimir depois.
+// Também testa captura de FOTO (getUserMedia + canvas) com moldura de rosto,
+// prototipo pra etapa de selfie da vistoria de entrega.
 // Não está ligada a nenhuma vistoria — é só um laboratório de teste.
 
 const RESOLUCOES = [
@@ -35,6 +37,7 @@ function fmtMB(bytes: number): string {
 }
 
 export default function TesteCameraPage() {
+  const [modo, setModo] = useState<'video' | 'foto'>('video')
   const [resolucao, setResolucao] = useState<(typeof RESOLUCOES)[number]>(RESOLUCOES[0])
   const [bitrate, setBitrate] = useState<(typeof BITRATES)[number]>(BITRATES[0])
   const [autorizado, setAutorizado] = useState<boolean | null>(null)
@@ -45,12 +48,14 @@ export default function TesteCameraPage() {
   const [ajusteReal, setAjusteReal] = useState<{ width?: number; height?: number } | null>(null)
 
   const [resultado, setResultado] = useState<{ url: string; tamanho: number; duracao: number; mimeType: string } | null>(null)
+  const [fotoResultado, setFotoResultado] = useState<{ url: string; tamanho: number } | null>(null)
 
   const previewRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     try {
@@ -75,11 +80,9 @@ export default function TesteCameraPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: {
-          facingMode: 'environment',
-          width: { ideal: resolucao.width },
-          height: { ideal: resolucao.height },
-        },
+        video: modo === 'foto'
+          ? { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } }
+          : { facingMode: 'environment', width: { ideal: resolucao.width }, height: { ideal: resolucao.height } },
       })
       streamRef.current = stream
       if (previewRef.current) {
@@ -101,6 +104,21 @@ export default function TesteCameraPage() {
     setCameraAtiva(false)
     setAjusteReal(null)
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+  }
+
+  function capturarFoto() {
+    const video = previewRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const url = canvas.toDataURL('image/jpeg', 0.75)
+    const tamanho = Math.round((url.length * 3) / 4) // base64 -> bytes aproximado
+    setFotoResultado({ url, tamanho })
+    pararCamera()
   }
 
   function iniciarGravacao() {
@@ -161,7 +179,7 @@ export default function TesteCameraPage() {
   // Enquanto a câmera está ligada e ainda não tem resultado, esconde o resto
   // da tela e limita o preview a uma fração da tela — sobra espaço garantido
   // pros botões sem precisar calcular a altura exata do cabeçalho do app
-  const modoCaptura = cameraAtiva && !resultado
+  const modoCaptura = cameraAtiva && !resultado && !fotoResultado
 
   return (
     <>
@@ -174,51 +192,79 @@ export default function TesteCameraPage() {
 
         {!cameraAtiva && (
           <>
+            {/* Toggle Vídeo/Foto */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => { setModo('video'); setFotoResultado(null) }}
+                className={`py-2.5 rounded-lg text-sm font-semibold border-2 flex items-center justify-center gap-2 transition-all ${
+                  modo === 'video'
+                    ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md'
+                    : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
+                }`}
+              >
+                <VideoIcon className="w-4 h-4" /> Vídeo
+              </button>
+              <button
+                onClick={() => { setModo('foto'); setResultado(null) }}
+                className={`py-2.5 rounded-lg text-sm font-semibold border-2 flex items-center justify-center gap-2 transition-all ${
+                  modo === 'foto'
+                    ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md'
+                    : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
+                }`}
+              >
+                <ImageIcon className="w-4 h-4" /> Foto
+              </button>
+            </div>
+
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-              Essa tela é só pra testar gravação com resolução/bitrate limitados desde o começo,
-              em vez de comprimir depois. Nada aqui é enviado pra lugar nenhum.
+              {modo === 'video'
+                ? 'Testa gravação com resolução/bitrate limitados desde o começo, em vez de comprimir depois.'
+                : 'Testa captura de foto (câmera frontal) com moldura de rosto, qualidade JPEG 75%.'}
+              {' '}Nada aqui é enviado pra lugar nenhum.
             </div>
 
-            {/* Configurações */}
-            <div className="bg-white border rounded-xl p-4 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Resolução pedida</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {RESOLUCOES.map((r) => (
-                    <button
-                      key={r.label}
-                      onClick={() => setResolucao(r)}
-                      className={`py-2.5 rounded-lg text-sm font-semibold border-2 transition-all ${
-                        resolucao.label === r.label
-                          ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md scale-[1.03]'
-                          : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
+            {/* Configurações — só fazem sentido pro modo vídeo */}
+            {modo === 'video' && (
+              <div className="bg-white border rounded-xl p-4 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Resolução pedida</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {RESOLUCOES.map((r) => (
+                      <button
+                        key={r.label}
+                        onClick={() => setResolucao(r)}
+                        className={`py-2.5 rounded-lg text-sm font-semibold border-2 transition-all ${
+                          resolucao.label === r.label
+                            ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md scale-[1.03]'
+                            : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Bitrate</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {BITRATES.map((b) => (
-                    <button
-                      key={b.label}
-                      onClick={() => setBitrate(b)}
-                      className={`py-2.5 rounded-lg text-xs font-semibold border-2 transition-all ${
-                        bitrate.label === b.label
-                          ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md scale-[1.03]'
-                          : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
-                      }`}
-                    >
-                      {b.label}
-                    </button>
-                  ))}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Bitrate</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {BITRATES.map((b) => (
+                      <button
+                        key={b.label}
+                        onClick={() => setBitrate(b)}
+                        className={`py-2.5 rounded-lg text-xs font-semibold border-2 transition-all ${
+                          bitrate.label === b.label
+                            ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md scale-[1.03]'
+                            : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
+                        }`}
+                      >
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </>
         )}
 
@@ -229,6 +275,15 @@ export default function TesteCameraPage() {
         {/* Preview */}
         <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'h-[42vh]' : 'h-64'}`}>
           <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
+          <canvas ref={canvasRef} className="hidden" />
+          {modo === 'foto' && cameraAtiva && !fotoResultado && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div
+                className="w-[62%] aspect-[3/4] rounded-[50%] border-2 border-white/80"
+                style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)' }}
+              />
+            </div>
+          )}
           {!cameraAtiva && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/70 text-sm">
               Câmera desligada
@@ -262,7 +317,11 @@ export default function TesteCameraPage() {
               >
                 <RotateCcw className="w-5 h-5" />
               </Button>
-              {!gravando ? (
+              {modo === 'foto' ? (
+                <Button className="flex-1 gap-2 h-14 text-base font-bold shadow-md" onClick={capturarFoto}>
+                  <Camera className="w-5 h-5" /> Tirar foto
+                </Button>
+              ) : !gravando ? (
                 <Button className="flex-1 gap-2 h-14 text-base font-bold bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/30" onClick={iniciarGravacao}>
                   <Circle className="w-5 h-5 fill-white" /> Gravar
                 </Button>
@@ -275,7 +334,29 @@ export default function TesteCameraPage() {
           )}
         </div>
 
-        {/* Resultado */}
+        {/* Resultado — foto */}
+        {fotoResultado && (
+          <div className="bg-white border rounded-xl p-4 space-y-3 shrink-0">
+            <p className="text-sm font-semibold">Resultado da foto</p>
+            <img src={fotoResultado.url} alt="Foto capturada" className="w-full rounded-lg border" />
+            <div className="bg-muted/50 rounded-lg py-2 text-center">
+              <p className="text-xs text-muted-foreground">Tamanho</p>
+              <p className="text-sm font-bold">{fmtMB(fotoResultado.tamanho)} MB</p>
+            </div>
+            <div className="flex gap-2">
+              <a href={fotoResultado.url} download="teste-foto.jpg" className="flex-1">
+                <Button variant="outline" className="w-full gap-2">
+                  <Download className="w-4 h-4" /> Baixar foto
+                </Button>
+              </a>
+              <Button variant="outline" className="gap-2" onClick={() => { setFotoResultado(null); iniciarCamera() }}>
+                Tirar de novo
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Resultado — vídeo */}
         {resultado && (
           <div className="bg-white border rounded-xl p-4 space-y-3 shrink-0">
             <p className="text-sm font-semibold">Resultado da gravação</p>
