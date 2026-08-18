@@ -114,6 +114,11 @@ export default function TesteCameraPage() {
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+    if (modo === 'foto') {
+      // Câmera frontal: espelha a captura pra bater com o preview (efeito selfie)
+      ctx.translate(canvas.width, 0)
+      ctx.scale(-1, 1)
+    }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const url = canvas.toDataURL('image/jpeg', 0.75)
     const tamanho = Math.round((url.length * 3) / 4) // base64 -> bytes aproximado
@@ -274,7 +279,7 @@ export default function TesteCameraPage() {
 
         {/* Preview */}
         <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'h-[42vh]' : 'h-64'}`}>
-          <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
+          <video ref={previewRef} muted playsInline className={`w-full h-full object-cover ${modo === 'foto' ? 'scale-x-[-1]' : ''}`} />
           <canvas ref={canvasRef} className="hidden" />
           {modo === 'foto' && cameraAtiva && !fotoResultado && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
