@@ -164,7 +164,7 @@ function VistoriaEntregaContent() {
         const cliente = data.response?.cliente
         const isEmpty = cliente == null || (typeof cliente === 'object' && Object.keys(cliente).length === 0)
         setContratoApto(!isEmpty)
-        setPularVerificacaoFacial(data.response?.contrato?.['verificação-facial'] === 'FALSO')
+        setPularVerificacaoFacial(String(data.response?.contrato?.['Verificação-facial']).toUpperCase() === 'FALSO')
         if (!isEmpty && cliente.foto_cnh) {
           const url = cliente.foto_cnh.startsWith('//') ? `https:${cliente.foto_cnh}` : cliente.foto_cnh
           setFotoCnhUrl(url)
