@@ -112,6 +112,7 @@ function VistoriaEntregaContent() {
   const [contratoApto, setContratoApto] = useState<boolean | null>(null)
   const [validandoContrato, setValidandoContrato] = useState(true)
   const [fotoCnhUrl, setFotoCnhUrl] = useState<string | null>(null)
+  const [pularVerificacaoFacial, setPularVerificacaoFacial] = useState(false)
 
   // Dados do veiculo
   const [veiculoKm, setVeiculoKm] = useState<number | null>(null)
@@ -163,6 +164,7 @@ function VistoriaEntregaContent() {
         const cliente = data.response?.cliente
         const isEmpty = cliente == null || (typeof cliente === 'object' && Object.keys(cliente).length === 0)
         setContratoApto(!isEmpty)
+        setPularVerificacaoFacial(data.response?.contrato?.['verificação-facial'] === 'FALSO')
         if (!isEmpty && cliente.foto_cnh) {
           const url = cliente.foto_cnh.startsWith('//') ? `https:${cliente.foto_cnh}` : cliente.foto_cnh
           setFotoCnhUrl(url)
@@ -444,6 +446,10 @@ function VistoriaEntregaContent() {
 
   function handleAvancar() {
     if (etapa === 0) {
+      if (pularVerificacaoFacial) {
+        mudarEtapa(1)
+        return
+      }
       validarFacial()
       return
     }
