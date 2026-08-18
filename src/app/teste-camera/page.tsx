@@ -37,7 +37,7 @@ function fmtMB(bytes: number): string {
 }
 
 export default function TesteCameraPage() {
-  const [modo, setModo] = useState<'video' | 'foto'>('video')
+  const [modo, setModo] = useState<'video' | 'foto' | 'selfie'>('video')
   const [resolucao, setResolucao] = useState<(typeof RESOLUCOES)[number]>(RESOLUCOES[0])
   const [bitrate, setBitrate] = useState<(typeof BITRATES)[number]>(BITRATES[0])
   const [autorizado, setAutorizado] = useState<boolean | null>(null)
@@ -80,7 +80,7 @@ export default function TesteCameraPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: modo === 'foto'
+        video: modo !== 'video'
           ? { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } }
           : { facingMode: 'environment', width: { ideal: resolucao.width }, height: { ideal: resolucao.height } },
       })
@@ -114,7 +114,7 @@ export default function TesteCameraPage() {
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    if (modo === 'foto') {
+    if (modo !== 'video') {
       // Câmera frontal: espelha a captura pra bater com o preview (efeito selfie)
       ctx.translate(canvas.width, 0)
       ctx.scale(-1, 1)
@@ -197,8 +197,8 @@ export default function TesteCameraPage() {
 
         {!cameraAtiva && (
           <>
-            {/* Toggle Vídeo/Foto */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Toggle Vídeo/Foto/Selfie */}
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => { setModo('video'); setFotoResultado(null) }}
                 className={`py-2.5 rounded-lg text-sm font-semibold border-2 flex items-center justify-center gap-2 transition-all ${
@@ -219,12 +219,24 @@ export default function TesteCameraPage() {
               >
                 <ImageIcon className="w-4 h-4" /> Foto
               </button>
+              <button
+                onClick={() => { setModo('selfie'); setResultado(null) }}
+                className={`py-2.5 rounded-lg text-sm font-semibold border-2 flex items-center justify-center gap-2 transition-all ${
+                  modo === 'selfie'
+                    ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md'
+                    : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
+                }`}
+              >
+                <Camera className="w-4 h-4" /> Selfie
+              </button>
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
               {modo === 'video'
                 ? 'Testa gravação com resolução/bitrate limitados desde o começo, em vez de comprimir depois.'
-                : 'Testa captura de foto (câmera frontal) com moldura de rosto, qualidade JPEG 75%.'}
+                : modo === 'foto'
+                  ? 'Testa captura de foto (câmera frontal) com moldura de rosto, qualidade JPEG 75%.'
+                  : 'Prévia exata do card da etapa de selfie da vistoria de entrega, ainda sem aplicar lá.'}
               {' '}Nada aqui é enviado pra lugar nenhum.
             </div>
 
@@ -277,24 +289,89 @@ export default function TesteCameraPage() {
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 shrink-0">{erro}</div>
         )}
 
+        {modo === 'selfie' && (
+          <div
+            className="rounded-2xl p-[1px]"
+            style={{ background: 'linear-gradient(135deg, #6C63FF60, transparent 50%, #6C63FF30)' }}
+          >
+            <div className="bg-[#0D1229] rounded-2xl p-6 flex flex-col items-center gap-4">
+              <div className="relative">
+                <div
+                  className="w-20 h-20 rounded-3xl flex items-center justify-center"
+                  style={{ backgroundColor: '#6C63FF20', boxShadow: '0 0 30px #6C63FF25' }}
+                >
+                  <Camera className="w-10 h-10" style={{ color: '#6C63FF' }} />
+                </div>
+              </div>
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-white">Tire uma selfie</h2>
+                <p className="text-sm text-white/60 mt-1">Precisamos de uma foto sua para identificação.</p>
+              </div>
+
+              {fotoResultado ? (
+                <div
+                  className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
+                  style={{ border: '3px solid #6C63FF', boxShadow: '0 0 25px rgba(108,99,255,0.3)' }}
+                >
+                  <img src={fotoResultado.url} alt="Selfie capturada" className="w-full h-full object-cover" />
+                </div>
+              ) : cameraAtiva ? (
+                <div
+                  className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
+                  style={{ border: '3px solid #6C63FF', boxShadow: '0 0 25px rgba(108,99,255,0.3)' }}
+                >
+                  <video ref={previewRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                </div>
+              ) : null}
+              <canvas ref={canvasRef} className="hidden" />
+
+              {fotoResultado ? (
+                <Button
+                  onClick={() => { setFotoResultado(null); iniciarCamera() }}
+                  className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" /> Tirar novamente
+                </Button>
+              ) : cameraAtiva ? (
+                <Button
+                  onClick={capturarFoto}
+                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" /> Tirar foto
+                </Button>
+              ) : (
+                <Button
+                  onClick={iniciarCamera}
+                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" /> Ligar Camera
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {modo !== 'selfie' && (
+        <>
         {/* Preview */}
-        <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'h-[42vh]' : 'h-64'}`}>
-          <video
-            ref={previewRef}
-            muted
-            playsInline
-            className="w-full h-full object-cover"
-            style={modo === 'foto' ? { transform: 'scaleX(-1)' } : undefined}
-          />
-          <canvas ref={canvasRef} className="hidden" />
-          {modo === 'foto' && cameraAtiva && !fotoResultado && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div
-                className="w-[62%] aspect-[3/4] rounded-[50%] border-2 border-white/80"
-                style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)' }}
+        <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'h-[42vh]' : 'h-64'} ${modo === 'foto' ? 'flex items-center justify-center' : ''}`}>
+          {modo === 'foto' ? (
+            <div
+              className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
+              style={cameraAtiva ? { border: '3px solid #6C63FF', boxShadow: '0 0 25px rgba(108,99,255,0.3)' } : undefined}
+            >
+              <video
+                ref={previewRef}
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                style={{ transform: 'scaleX(-1)' }}
               />
             </div>
+          ) : (
+            <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
           )}
+          <canvas ref={canvasRef} className="hidden" />
           {!cameraAtiva && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/70 text-sm">
               Câmera desligada
@@ -397,6 +474,8 @@ export default function TesteCameraPage() {
               </Button>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </>
