@@ -315,14 +315,19 @@ export default function TesteCameraPage() {
                 >
                   <img src={fotoResultado.url} alt="Selfie capturada" className="w-full h-full object-cover" />
                 </div>
-              ) : cameraAtiva ? (
+              ) : (
                 <div
                   className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
-                  style={{ border: '3px solid #6C63FF', boxShadow: '0 0 25px rgba(108,99,255,0.3)' }}
+                  style={cameraAtiva ? { border: '3px solid #6C63FF', boxShadow: '0 0 25px rgba(108,99,255,0.3)' } : undefined}
                 >
                   <video ref={previewRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                  {!cameraAtiva && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/50 text-xs text-center px-4">
+                      Câmera desligada
+                    </div>
+                  )}
                 </div>
-              ) : null}
+              )}
               <canvas ref={canvasRef} className="hidden" />
 
               {fotoResultado ? (
