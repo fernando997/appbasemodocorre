@@ -279,7 +279,13 @@ export default function TesteCameraPage() {
 
         {/* Preview */}
         <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'h-[42vh]' : 'h-64'}`}>
-          <video ref={previewRef} muted playsInline className={`w-full h-full object-cover ${modo === 'foto' ? 'scale-x-[-1]' : ''}`} />
+          <video
+            ref={previewRef}
+            muted
+            playsInline
+            className="w-full h-full object-cover"
+            style={modo === 'foto' ? { transform: 'scaleX(-1)' } : undefined}
+          />
           <canvas ref={canvasRef} className="hidden" />
           {modo === 'foto' && cameraAtiva && !fotoResultado && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
