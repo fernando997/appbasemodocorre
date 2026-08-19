@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Camera, Search, X, RotateCcw, LogIn, LogOut, Gauge, Activity, RefreshCw, FileText, CheckCircle2, Building2, DoorOpen, Users, Fuel, Video, ChevronLeft, Loader2, AlertTriangle, ChevronRight, CircleDot, MessageSquare, ImageIcon, ClipboardList, Radio, HelpCircle, Eye, Send } from 'lucide-react'
+import { Camera, Search, X, RotateCcw, LogIn, LogOut, Gauge, Activity, RefreshCw, FileText, CheckCircle2, Building2, DoorOpen, Users, Fuel, Video, ChevronLeft, Loader2, AlertTriangle, ChevronRight, CircleDot, MessageSquare, ImageIcon, ClipboardList, Radio, HelpCircle, Eye, Send, MapPin, XCircle } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -257,7 +257,7 @@ export default function MovimentacaoPage() {
   const [consultando, setConsultando] = useState(false)
   const [resultado, setResultado] = useState<Movimentacao[] | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const [acao, setAcao] = useState<'status' | 'vistorias' | 'editar-km' | 'editar-status' | null>(null)
+  const [acao, setAcao] = useState<'status' | 'vistorias' | 'editar-km' | 'editar-status' | 'rastreador' | null>(null)
   const [novoKm, setNovoKm] = useState('')
   const [novoStatus, setNovoStatus] = useState('')
   const [kmEditarStatus, setKmEditarStatus] = useState('')
@@ -1397,6 +1397,18 @@ export default function MovimentacaoPage() {
                   <span className="text-[10px] text-muted-foreground">Alterar status da moto</span>
                 </div>
               </button>
+              <button
+                onClick={() => { setAcao('rastreador'); testarRastreador(placa) }}
+                className="flex flex-col items-center gap-2 bg-white border rounded-xl px-4 py-4 shadow-sm hover:shadow-md hover:border-cyan-300 transition-all"
+              >
+                <div className="w-10 h-10 rounded-full bg-cyan-100 flex items-center justify-center">
+                  <Radio className="w-5 h-5 text-cyan-600" />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-medium block">Rastreador</span>
+                  <span className="text-[10px] text-muted-foreground">Testar sinal</span>
+                </div>
+              </button>
             </div>
           </div>
         )}
@@ -1575,6 +1587,102 @@ export default function MovimentacaoPage() {
               {consultando ? 'Consultando...' : 'Consultar Status'}
             </Button>
             <button onClick={() => { setAcao(null); setResultado(null); setErro(null) }} className="text-xs text-muted-foreground hover:text-foreground underline">
+              Escolher outra opção
+            </button>
+          </div>
+        )}
+
+        {!analisando && placa && acao === 'rastreador' && (
+          <div className="space-y-3">
+            {testandoRastreador && (
+              <div className="bg-white border rounded-2xl p-8 flex flex-col items-center gap-3 shadow-sm">
+                <div className="w-14 h-14 rounded-full bg-cyan-100 flex items-center justify-center">
+                  <Loader2 className="w-7 h-7 text-cyan-600 animate-spin" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold">Testando rastreador...</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Consultando sinal da moto {placa}</p>
+                </div>
+              </div>
+            )}
+
+            {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
+              <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-gradient-to-r from-green-50 to-white px-5 py-4 flex items-center gap-3 border-b">
+                  <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-green-800">Rastreador ativo</p>
+                    <p className="text-xs text-muted-foreground truncate">Moto {placa} · {rastreadorInfo.plataforma}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 shrink-0"
+                    onClick={() => testarRastreador(placa)}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Testar novamente
+                  </Button>
+                </div>
+                <div className="p-4 space-y-2.5">
+                  {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => {
+                    const temSinal = loc.lat != null && loc.long != null
+                    return (
+                      <div
+                        key={nome}
+                        className={`rounded-xl border p-3 flex items-center gap-3 ${temSinal ? 'border-green-200 bg-green-50/50' : 'border-zinc-200 bg-zinc-50'}`}
+                      >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${temSinal ? 'bg-green-100' : 'bg-zinc-200'}`}>
+                          <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium capitalize">{nome}</p>
+                          {temSinal ? (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-zinc-400">Sem sinal</p>
+                          )}
+                        </div>
+                        {temSinal && (
+                          <a
+                            href={`https://www.google.com/maps?q=${loc.lat},${loc.long}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0"
+                          >
+                            <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8">
+                              <MapPin className="w-3.5 h-3.5" /> Ver mapa
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
+              <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+                <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
+                  <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
+                    <XCircle className="w-7 h-7 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-red-800">Sem sinal</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Nenhum rastreador desta moto retornou localização.</p>
+                  </div>
+                  <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100 mt-1" onClick={() => testarRastreador(placa)}>
+                    <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => { setAcao(null); setRastreadorInfo(null); setEnderecosRastreador({}) }} className="text-xs text-muted-foreground hover:text-foreground underline">
               Escolher outra opção
             </button>
           </div>
@@ -1770,50 +1878,87 @@ export default function MovimentacaoPage() {
 
               {/* Teste dos rastreadores */}
               {testandoRastreador && (
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Testando rastreadores...
+                <div className="bg-white border rounded-2xl p-8 flex flex-col items-center gap-3 shadow-sm">
+                  <div className="w-14 h-14 rounded-full bg-cyan-100 flex items-center justify-center">
+                    <Loader2 className="w-7 h-7 text-cyan-600 animate-spin" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold">Testando rastreador...</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Consultando sinal da moto {placa}</p>
+                  </div>
                 </div>
               )}
+
               {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
-                <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
-                  <div className="bg-[#1B2043] px-4 py-2.5 flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-white/70" />
-                    <span className="text-xs font-medium text-white">Rastreadores</span>
-                    <Badge className="ml-auto bg-green-500/20 text-green-300 border-green-400/30 text-xs">OK</Badge>
+                <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-gradient-to-r from-green-50 to-white px-5 py-4 flex items-center gap-3 border-b">
+                    <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-green-800">Rastreador ativo</p>
+                      <p className="text-xs text-muted-foreground truncate">Moto {placa} · {rastreadorInfo.plataforma}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 shrink-0"
+                      onClick={() => testarRastreador(placa)}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Testar novamente
+                    </Button>
                   </div>
-                  <div className="px-4 py-3 space-y-2">
-                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => (
-                      <div key={nome} className="flex items-start justify-between gap-3">
-                        <span className="text-xs text-muted-foreground capitalize shrink-0">{nome}</span>
-                        {loc.lat != null && loc.long != null ? (
-                          <div className="text-right">
+                  <div className="p-4 space-y-2.5">
+                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => {
+                      const temSinal = loc.lat != null && loc.long != null
+                      return (
+                        <div
+                          key={nome}
+                          className={`rounded-xl border p-3 flex items-center gap-3 ${temSinal ? 'border-green-200 bg-green-50/50' : 'border-zinc-200 bg-zinc-50'}`}
+                        >
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${temSinal ? 'bg-green-100' : 'bg-zinc-200'}`}>
+                            <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium capitalize">{nome}</p>
+                            {temSinal ? (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-zinc-400">Sem sinal</p>
+                            )}
+                          </div>
+                          {temSinal && (
                             <a
                               href={`https://www.google.com/maps?q=${loc.lat},${loc.long}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs font-mono text-blue-600 underline hover:text-blue-800"
+                              className="shrink-0"
                             >
-                              {loc.lat.toFixed(6)}, {loc.long.toFixed(6)}
+                              <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8">
+                                <MapPin className="w-3.5 h-3.5" /> Ver mapa
+                              </Button>
                             </a>
-                            {enderecosRastreador[nome] && (
-                              <p className="text-[11px] text-muted-foreground mt-0.5">{enderecosRastreador[nome]}</p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Sem sinal</span>
-                        )}
-                      </div>
-                    ))}
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
+
               {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                  <div className="flex-1 space-y-2">
-                    <p className="text-sm text-red-700">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a vistoria.</p>
-                    <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100" onClick={() => testarRastreador(placa)}>
+                <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
+                    <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
+                      <XCircle className="w-7 h-7 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-red-800">Sem sinal</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a vistoria.</p>
+                    </div>
+                    <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100 mt-1" onClick={() => testarRastreador(placa)}>
                       <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                     </Button>
                   </div>
@@ -2608,50 +2753,87 @@ export default function MovimentacaoPage() {
 
               {/* Teste dos rastreadores */}
               {testandoRastreador && (
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Testando rastreadores...
+                <div className="bg-white border rounded-2xl p-8 flex flex-col items-center gap-3 shadow-sm">
+                  <div className="w-14 h-14 rounded-full bg-cyan-100 flex items-center justify-center">
+                    <Loader2 className="w-7 h-7 text-cyan-600 animate-spin" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold">Testando rastreador...</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Consultando sinal da moto {placaNovaSub}</p>
+                  </div>
                 </div>
               )}
+
               {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
-                <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
-                  <div className="bg-[#1B2043] px-4 py-2.5 flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-white/70" />
-                    <span className="text-xs font-medium text-white">Rastreadores</span>
-                    <Badge className="ml-auto bg-green-500/20 text-green-300 border-green-400/30 text-xs">OK</Badge>
+                <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-gradient-to-r from-green-50 to-white px-5 py-4 flex items-center gap-3 border-b">
+                    <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-green-800">Rastreador ativo</p>
+                      <p className="text-xs text-muted-foreground truncate">Moto {placaNovaSub} · {rastreadorInfo.plataforma}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 shrink-0"
+                      onClick={() => testarRastreador(placaNovaSub)}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Testar novamente
+                    </Button>
                   </div>
-                  <div className="px-4 py-3 space-y-2">
-                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => (
-                      <div key={nome} className="flex items-start justify-between gap-3">
-                        <span className="text-xs text-muted-foreground capitalize shrink-0">{nome}</span>
-                        {loc.lat != null && loc.long != null ? (
-                          <div className="text-right">
+                  <div className="p-4 space-y-2.5">
+                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => {
+                      const temSinal = loc.lat != null && loc.long != null
+                      return (
+                        <div
+                          key={nome}
+                          className={`rounded-xl border p-3 flex items-center gap-3 ${temSinal ? 'border-green-200 bg-green-50/50' : 'border-zinc-200 bg-zinc-50'}`}
+                        >
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${temSinal ? 'bg-green-100' : 'bg-zinc-200'}`}>
+                            <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium capitalize">{nome}</p>
+                            {temSinal ? (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-zinc-400">Sem sinal</p>
+                            )}
+                          </div>
+                          {temSinal && (
                             <a
                               href={`https://www.google.com/maps?q=${loc.lat},${loc.long}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs font-mono text-blue-600 underline hover:text-blue-800"
+                              className="shrink-0"
                             >
-                              {loc.lat.toFixed(6)}, {loc.long.toFixed(6)}
+                              <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8">
+                                <MapPin className="w-3.5 h-3.5" /> Ver mapa
+                              </Button>
                             </a>
-                            {enderecosRastreador[nome] && (
-                              <p className="text-[11px] text-muted-foreground mt-0.5">{enderecosRastreador[nome]}</p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Sem sinal</span>
-                        )}
-                      </div>
-                    ))}
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
+
               {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                  <div className="flex-1 space-y-2">
-                    <p className="text-sm text-red-700">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a substituição.</p>
-                    <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100" onClick={() => testarRastreador(placaNovaSub)}>
+                <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
+                    <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
+                      <XCircle className="w-7 h-7 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-red-800">Sem sinal</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a substituição.</p>
+                    </div>
+                    <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100 mt-1" onClick={() => testarRastreador(placaNovaSub)}>
                       <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                     </Button>
                   </div>
