@@ -611,152 +611,130 @@ function VistoriaEntregaContent() {
     switch (etapa) {
       case 0:
         return (
-          <GradientBorderCard etapaKey={etapaKey} themeColor={theme.color}>
-            <div className="flex flex-col items-center gap-4">
-              <StepIcon icon={UserCircle} />
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-white">Tire uma selfie</h2>
-                <p className="text-sm text-white/60 mt-1">Precisamos de uma foto sua para identificacao.</p>
-              </div>
-              {selfie ? (
-                <div className="relative">
-                  <img
-                    src={selfie}
-                    alt="Selfie"
-                    className="w-48 h-48 object-cover rounded-2xl transition-all duration-500"
-                    style={{
-                      border: validandoFacial
-                        ? '2px solid transparent'
-                        : facialStatus === 'aprovado'
-                          ? '2px solid #22C55E'
-                          : facialStatus === 'reprovado'
-                            ? '2px solid #EF4444'
-                            : '2px solid rgba(108,99,255,0.5)',
-                      boxShadow: validandoFacial
-                        ? '0 0 25px rgba(108,99,255,0.4)'
-                        : facialStatus === 'aprovado'
-                          ? '0 0 30px rgba(34,197,94,0.4)'
-                          : 'none',
-                    }}
-                  />
-                  {/* Scanning overlay */}
-                  {validandoFacial && (
-                    <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                      {/* Animated border */}
-                      <div className="absolute inset-0 rounded-2xl animate-[scan-border_1.5s_linear_infinite]" style={{ border: '2px solid #6C63FF' }} />
-                      {/* Sweep line */}
-                      <div className="absolute left-0 right-0 h-[2px] animate-[scan-line_2s_ease-in-out_infinite]" style={{ background: 'linear-gradient(90deg, transparent, #6C63FF, transparent)', boxShadow: '0 0 15px 3px rgba(108,99,255,0.5)' }} />
-                      {/* Corner brackets */}
-                      <div className="absolute top-1 left-1 w-5 h-5 border-t-2 border-l-2 border-[#6C63FF] rounded-tl-lg animate-pulse" />
-                      <div className="absolute top-1 right-1 w-5 h-5 border-t-2 border-r-2 border-[#6C63FF] rounded-tr-lg animate-pulse" />
-                      <div className="absolute bottom-1 left-1 w-5 h-5 border-b-2 border-l-2 border-[#6C63FF] rounded-bl-lg animate-pulse" />
-                      <div className="absolute bottom-1 right-1 w-5 h-5 border-b-2 border-r-2 border-[#6C63FF] rounded-br-lg animate-pulse" />
-                      {/* Semi-transparent overlay */}
-                      <div className="absolute inset-0 bg-[#6C63FF]/10 rounded-2xl" />
-                    </div>
-                  )}
-                  {/* Approved checkmark overlay */}
-                  {facialStatus === 'aprovado' && (
-                    <div className="absolute inset-0 rounded-2xl flex items-center justify-center" style={{ animation: 'scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-                      <div className="w-16 h-16 rounded-full bg-[#22C55E] flex items-center justify-center shadow-[0_0_30px_rgba(34,197,94,0.5)]">
-                        <CheckCircle2 className="w-10 h-10 text-white" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  className="relative w-48 h-48 rounded-2xl overflow-hidden bg-black"
-                  style={cameraSelfieAtiva ? { border: '2px solid rgba(108,99,255,0.5)' } : undefined}
-                >
-                  <video
-                    ref={previewSelfieRef}
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                    style={{ transform: 'scaleX(-1)' }}
-                  />
-                  {!cameraSelfieAtiva && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/50 text-xs text-center px-4">
-                      Camera desligada
-                    </div>
-                  )}
-                </div>
-              )}
-              <canvas ref={canvasSelfieRef} className="hidden" />
-              {/* Facial analysis steps */}
-              {validandoFacial && (
-                <div className="w-full space-y-2" style={{ animation: 'fadeInUp 0.3s ease-out' }}>
-                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
-                    {facialStep >= 1 ? (
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 1 ? 'bg-[#22C55E]' : 'bg-[#6C63FF] animate-pulse'}`}>
-                        {facialStep > 1 ? <CheckCircle2 className="w-3 h-3 text-white" /> : <Loader2 className="w-3 h-3 text-white animate-spin" />}
-                      </div>
-                    ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
-                    <span className={`text-xs ${facialStep >= 1 ? 'text-white/80' : 'text-white/40'}`}>Enviando imagens...</span>
-                  </div>
-                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
-                    {facialStep >= 2 ? (
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 2 ? 'bg-[#22C55E]' : 'bg-[#6C63FF] animate-pulse'}`}>
-                        {facialStep > 2 ? <CheckCircle2 className="w-3 h-3 text-white" /> : <Loader2 className="w-3 h-3 text-white animate-spin" />}
-                      </div>
-                    ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
-                    <span className={`text-xs ${facialStep >= 2 ? 'text-white/80' : 'text-white/40'}`}>Analisando rosto...</span>
-                  </div>
-                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
-                    {facialStep >= 3 ? (
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[#6C63FF] animate-pulse">
-                        <Loader2 className="w-3 h-3 text-white animate-spin" />
-                      </div>
-                    ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
-                    <span className={`text-xs ${facialStep >= 3 ? 'text-white/80' : 'text-white/40'}`}>Comparando com CNH...</span>
-                  </div>
-                </div>
-              )}
-              {!validandoFacial && (
-                selfie ? (
-                  <Button
-                    onClick={() => { setSelfie(null); setFacialStatus('idle'); setFacialErro(''); iniciarCameraSelfie() }}
-                    className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
-                  >
-                    <Camera className="w-4 h-4 mr-2" />
-                    Tirar novamente
-                  </Button>
-                ) : cameraSelfieAtiva ? (
-                  <Button
-                    onClick={capturarSelfie}
-                    className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
-                  >
-                    <Camera className="w-4 h-4 mr-2" />
-                    Tirar foto
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={iniciarCameraSelfie}
-                    className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
-                  >
-                    <Camera className="w-4 h-4 mr-2" />
-                    Ligar Camera
-                  </Button>
-                )
-              )}
-              {erroCameraSelfie && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full">
-                  <p className="text-sm text-red-300 text-center">{erroCameraSelfie}</p>
-                </div>
-              )}
-              {facialStatus === 'reprovado' && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
-                  <p className="text-sm text-red-300 text-center">{facialErro}</p>
-                </div>
-              )}
-              {facialErro && facialStatus === 'idle' && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
-                  <p className="text-sm text-red-300 text-center">{facialErro}</p>
-                </div>
-              )}
+          <div
+            key={etapaKey}
+            className="mx-4 rounded-2xl p-6 bg-[#1E2233] flex flex-col items-center gap-4"
+            style={{ animation: 'cardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1)' }}
+          >
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-white">Tire uma selfie</h2>
+              <p className="text-sm text-white/60 mt-1">Precisamos de uma foto sua para identificacao.</p>
             </div>
-          </GradientBorderCard>
+            {selfie ? (
+              <div className="relative">
+                <img
+                  src={selfie}
+                  alt="Selfie"
+                  className="w-56 aspect-[3/4] object-cover rounded-full transition-all duration-500"
+                  style={{
+                    border: facialStatus === 'aprovado'
+                      ? '3px solid #22C55E'
+                      : facialStatus === 'reprovado'
+                        ? '3px solid #EF4444'
+                        : '3px solid #6C63FF',
+                  }}
+                />
+                {/* Approved checkmark overlay */}
+                {facialStatus === 'aprovado' && (
+                  <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ animation: 'scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                    <div className="w-16 h-16 rounded-full bg-[#22C55E] flex items-center justify-center shadow-[0_0_30px_rgba(34,197,94,0.5)]">
+                      <CheckCircle2 className="w-10 h-10 text-white" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
+                style={{ border: '3px solid #6C63FF' }}
+              >
+                <video
+                  ref={previewSelfieRef}
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                  style={{ transform: 'scaleX(-1)' }}
+                />
+                {!cameraSelfieAtiva && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/50 text-xs text-center px-4">
+                    Camera desligada
+                  </div>
+                )}
+              </div>
+            )}
+            <canvas ref={canvasSelfieRef} className="hidden" />
+            {/* Facial analysis steps */}
+            {validandoFacial && (
+              <div className="w-full space-y-2" style={{ animation: 'fadeInUp 0.3s ease-out' }}>
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
+                  {facialStep >= 1 ? (
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 1 ? 'bg-[#22C55E]' : 'bg-[#6C63FF] animate-pulse'}`}>
+                      {facialStep > 1 ? <CheckCircle2 className="w-3 h-3 text-white" /> : <Loader2 className="w-3 h-3 text-white animate-spin" />}
+                    </div>
+                  ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
+                  <span className={`text-xs ${facialStep >= 1 ? 'text-white/80' : 'text-white/40'}`}>Enviando imagens...</span>
+                </div>
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
+                  {facialStep >= 2 ? (
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 2 ? 'bg-[#22C55E]' : 'bg-[#6C63FF] animate-pulse'}`}>
+                      {facialStep > 2 ? <CheckCircle2 className="w-3 h-3 text-white" /> : <Loader2 className="w-3 h-3 text-white animate-spin" />}
+                    </div>
+                  ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
+                  <span className={`text-xs ${facialStep >= 2 ? 'text-white/80' : 'text-white/40'}`}>Analisando rosto...</span>
+                </div>
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
+                  {facialStep >= 3 ? (
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[#6C63FF] animate-pulse">
+                      <Loader2 className="w-3 h-3 text-white animate-spin" />
+                    </div>
+                  ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
+                  <span className={`text-xs ${facialStep >= 3 ? 'text-white/80' : 'text-white/40'}`}>Comparando com CNH...</span>
+                </div>
+              </div>
+            )}
+            {!validandoFacial && (
+              selfie ? (
+                <Button
+                  onClick={() => { setSelfie(null); setFacialStatus('idle'); setFacialErro(''); iniciarCameraSelfie() }}
+                  className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Tirar novamente
+                </Button>
+              ) : cameraSelfieAtiva ? (
+                <Button
+                  onClick={capturarSelfie}
+                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Tirar foto
+                </Button>
+              ) : (
+                <Button
+                  onClick={iniciarCameraSelfie}
+                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Ligar Camera
+                </Button>
+              )
+            )}
+            {erroCameraSelfie && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full">
+                <p className="text-sm text-red-300 text-center">{erroCameraSelfie}</p>
+              </div>
+            )}
+            {facialStatus === 'reprovado' && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
+                <p className="text-sm text-red-300 text-center">{facialErro}</p>
+              </div>
+            )}
+            {facialErro && facialStatus === 'idle' && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
+                <p className="text-sm text-red-300 text-center">{facialErro}</p>
+              </div>
+            )}
+          </div>
         )
 
       case 1:
