@@ -589,12 +589,12 @@ function VistoriaEntregaContent() {
         return (
           <div
             key={etapaKey}
-            className="mx-4 rounded-2xl p-6 bg-[#F5F3EF] flex flex-col items-center gap-4"
+            className="mx-4 rounded-2xl p-6 bg-[#1E2233] flex flex-col items-center gap-4"
             style={{ animation: 'cardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1)' }}
           >
             <div className="text-center">
-              <h2 className="text-xl font-bold text-[#1A1A2E]">Tire uma selfie</h2>
-              <p className="text-sm text-[#1A1A2E]/60 mt-1">Precisamos de uma foto sua para identificacao.</p>
+              <h2 className="text-xl font-bold text-white">Tire uma selfie</h2>
+              <p className="text-sm text-white/60 mt-1">Precisamos de uma foto sua para identificacao.</p>
             </div>
             {selfie ? (
               <div className="relative">
@@ -607,7 +607,7 @@ function VistoriaEntregaContent() {
                       ? '3px solid #22C55E'
                       : facialStatus === 'reprovado'
                         ? '3px solid #EF4444'
-                        : '3px solid #F59E0B',
+                        : '3px solid #6C63FF',
                   }}
                 />
                 {/* Approved checkmark overlay */}
@@ -622,7 +622,7 @@ function VistoriaEntregaContent() {
             ) : (
               <div
                 className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
-                style={{ border: '3px solid #F59E0B' }}
+                style={{ border: '3px solid #6C63FF' }}
               >
                 <video
                   ref={previewSelfieRef}
@@ -642,29 +642,29 @@ function VistoriaEntregaContent() {
             {/* Facial analysis steps */}
             {validandoFacial && (
               <div className="w-full space-y-2" style={{ animation: 'fadeInUp 0.3s ease-out' }}>
-                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-black/5">
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
                   {facialStep >= 1 ? (
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 1 ? 'bg-[#22C55E]' : 'bg-[#F59E0B] animate-pulse'}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 1 ? 'bg-[#22C55E]' : 'bg-[#6C63FF] animate-pulse'}`}>
                       {facialStep > 1 ? <CheckCircle2 className="w-3 h-3 text-white" /> : <Loader2 className="w-3 h-3 text-white animate-spin" />}
                     </div>
-                  ) : <div className="w-5 h-5 rounded-full bg-black/10" />}
-                  <span className={`text-xs ${facialStep >= 1 ? 'text-[#1A1A2E]/80' : 'text-[#1A1A2E]/40'}`}>Enviando imagens...</span>
+                  ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
+                  <span className={`text-xs ${facialStep >= 1 ? 'text-white/80' : 'text-white/40'}`}>Enviando imagens...</span>
                 </div>
-                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-black/5">
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
                   {facialStep >= 2 ? (
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 2 ? 'bg-[#22C55E]' : 'bg-[#F59E0B] animate-pulse'}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 2 ? 'bg-[#22C55E]' : 'bg-[#6C63FF] animate-pulse'}`}>
                       {facialStep > 2 ? <CheckCircle2 className="w-3 h-3 text-white" /> : <Loader2 className="w-3 h-3 text-white animate-spin" />}
                     </div>
-                  ) : <div className="w-5 h-5 rounded-full bg-black/10" />}
-                  <span className={`text-xs ${facialStep >= 2 ? 'text-[#1A1A2E]/80' : 'text-[#1A1A2E]/40'}`}>Analisando rosto...</span>
+                  ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
+                  <span className={`text-xs ${facialStep >= 2 ? 'text-white/80' : 'text-white/40'}`}>Analisando rosto...</span>
                 </div>
-                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-black/5">
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
                   {facialStep >= 3 ? (
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[#F59E0B] animate-pulse">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[#6C63FF] animate-pulse">
                       <Loader2 className="w-3 h-3 text-white animate-spin" />
                     </div>
-                  ) : <div className="w-5 h-5 rounded-full bg-black/10" />}
-                  <span className={`text-xs ${facialStep >= 3 ? 'text-[#1A1A2E]/80' : 'text-[#1A1A2E]/40'}`}>Comparando com CNH...</span>
+                  ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
+                  <span className={`text-xs ${facialStep >= 3 ? 'text-white/80' : 'text-white/40'}`}>Comparando com CNH...</span>
                 </div>
               </div>
             )}
@@ -672,7 +672,7 @@ function VistoriaEntregaContent() {
               selfie ? (
                 <Button
                   onClick={() => { setSelfie(null); setFacialStatus('idle'); setFacialErro(''); iniciarCameraSelfie() }}
-                  className="bg-black/5 border border-black/10 text-[#1A1A2E] hover:bg-black/10 min-h-[44px]"
+                  className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
                 >
                   <Camera className="w-4 h-4 mr-2" />
                   Tirar novamente
@@ -680,7 +680,7 @@ function VistoriaEntregaContent() {
               ) : cameraSelfieAtiva ? (
                 <Button
                   onClick={capturarSelfie}
-                  className="bg-[#F59E0B] hover:bg-[#D97706] shadow-[0_4px_15px_rgba(245,158,11,0.4)] text-white min-h-[44px]"
+                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
                 >
                   <Camera className="w-4 h-4 mr-2" />
                   Tirar foto
@@ -688,7 +688,7 @@ function VistoriaEntregaContent() {
               ) : (
                 <Button
                   onClick={iniciarCameraSelfie}
-                  className="bg-[#F59E0B] hover:bg-[#D97706] shadow-[0_4px_15px_rgba(245,158,11,0.4)] text-white min-h-[44px]"
+                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
                 >
                   <Camera className="w-4 h-4 mr-2" />
                   Ligar Camera
@@ -696,18 +696,18 @@ function VistoriaEntregaContent() {
               )
             )}
             {erroCameraSelfie && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 w-full">
-                <p className="text-sm text-red-600 text-center">{erroCameraSelfie}</p>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full">
+                <p className="text-sm text-red-300 text-center">{erroCameraSelfie}</p>
               </div>
             )}
             {facialStatus === 'reprovado' && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
-                <p className="text-sm text-red-600 text-center">{facialErro}</p>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
+                <p className="text-sm text-red-300 text-center">{facialErro}</p>
               </div>
             )}
             {facialErro && facialStatus === 'idle' && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
-                <p className="text-sm text-red-600 text-center">{facialErro}</p>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
+                <p className="text-sm text-red-300 text-center">{facialErro}</p>
               </div>
             )}
           </div>
