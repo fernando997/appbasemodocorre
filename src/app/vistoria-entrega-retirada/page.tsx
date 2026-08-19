@@ -147,7 +147,11 @@ function VistoriaEntregaContent() {
 
   // Etapa 0 - Selfie
   const [selfie, setSelfie] = useState<string | null>(null)
-  const selfieRef = useRef<HTMLInputElement>(null)
+  const [cameraSelfieAtiva, setCameraSelfieAtiva] = useState(false)
+  const [erroCameraSelfie, setErroCameraSelfie] = useState('')
+  const previewSelfieRef = useRef<HTMLVideoElement>(null)
+  const streamSelfieRef = useRef<MediaStream | null>(null)
+  const canvasSelfieRef = useRef<HTMLCanvasElement>(null)
 
   // Validacao facial
   const [validandoFacial, setValidandoFacial] = useState(false)
@@ -210,6 +214,56 @@ function VistoriaEntregaContent() {
       .catch(() => {})
       .finally(() => setCarregandoVeiculo(false))
   }, [placa])
+
+  // Desliga a camera da selfie se o componente desmontar com ela ligada
+  useEffect(() => {
+    return () => {
+      streamSelfieRef.current?.getTracks().forEach((t) => t.stop())
+    }
+  }, [])
+
+  async function iniciarCameraSelfie() {
+    setErroCameraSelfie('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } },
+      })
+      streamSelfieRef.current = stream
+      if (previewSelfieRef.current) {
+        previewSelfieRef.current.srcObject = stream
+        await previewSelfieRef.current.play().catch(() => {})
+      }
+      setCameraSelfieAtiva(true)
+    } catch (err) {
+      setErroCameraSelfie(`Erro ao acessar a camera: ${String(err)}`)
+    }
+  }
+
+  function pararCameraSelfie() {
+    streamSelfieRef.current?.getTracks().forEach((t) => t.stop())
+    streamSelfieRef.current = null
+    setCameraSelfieAtiva(false)
+  }
+
+  function capturarSelfie() {
+    const video = previewSelfieRef.current
+    const canvas = canvasSelfieRef.current
+    if (!video || !canvas) return
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    // Espelha a captura pra bater com o preview (efeito selfie)
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    setFacialStatus('idle')
+    setFacialErro('')
+    setSelfie(dataUrl)
+    pararCameraSelfie()
+  }
 
   if (!placa || !contrato) {
     return (
@@ -307,13 +361,6 @@ function VistoriaEntregaContent() {
       }
       default: return true
     }
-  }
-
-  async function onSelfie(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const dataUrl = await readFileAsDataUrl(file)
-    setSelfie(dataUrl)
   }
 
   async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -571,7 +618,7 @@ function VistoriaEntregaContent() {
                 <h2 className="text-xl font-bold text-white">Tire uma selfie</h2>
                 <p className="text-sm text-white/60 mt-1">Precisamos de uma foto sua para identificacao.</p>
               </div>
-              {selfie && (
+              {selfie ? (
                 <div className="relative">
                   <img
                     src={selfie}
@@ -617,7 +664,26 @@ function VistoriaEntregaContent() {
                     </div>
                   )}
                 </div>
+              ) : (
+                <div
+                  className="relative w-48 h-48 rounded-2xl overflow-hidden bg-black"
+                  style={cameraSelfieAtiva ? { border: '2px solid rgba(108,99,255,0.5)' } : undefined}
+                >
+                  <video
+                    ref={previewSelfieRef}
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }}
+                  />
+                  {!cameraSelfieAtiva && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/50 text-xs text-center px-4">
+                      Camera desligada
+                    </div>
+                  )}
+                </div>
               )}
+              <canvas ref={canvasSelfieRef} className="hidden" />
               {/* Facial analysis steps */}
               {validandoFacial && (
                 <div className="w-full space-y-2" style={{ animation: 'fadeInUp 0.3s ease-out' }}>
@@ -648,19 +714,37 @@ function VistoriaEntregaContent() {
                 </div>
               )}
               {!validandoFacial && (
-                <Button
-                  onClick={() => selfieRef.current?.click()}
-                  className={
-                    selfie
-                      ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]'
-                      : 'bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]'
-                  }
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  {selfie ? 'Tirar novamente' : 'Abrir Camera'}
-                </Button>
+                selfie ? (
+                  <Button
+                    onClick={() => { setSelfie(null); setFacialStatus('idle'); setFacialErro(''); iniciarCameraSelfie() }}
+                    className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    Tirar novamente
+                  </Button>
+                ) : cameraSelfieAtiva ? (
+                  <Button
+                    onClick={capturarSelfie}
+                    className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    Tirar foto
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={iniciarCameraSelfie}
+                    className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    Ligar Camera
+                  </Button>
+                )
               )}
-              <input ref={selfieRef} type="file" accept="image/*" capture="user" className="hidden" onChange={(e) => { setFacialStatus('idle'); setFacialErro(''); onSelfie(e) }} />
+              {erroCameraSelfie && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full">
+                  <p className="text-sm text-red-300 text-center">{erroCameraSelfie}</p>
+                </div>
+              )}
               {facialStatus === 'reprovado' && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
                   <p className="text-sm text-red-300 text-center">{facialErro}</p>
