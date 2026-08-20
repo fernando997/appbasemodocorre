@@ -371,7 +371,82 @@ export default function TesteCameraPage() {
           </div>
         )}
 
-        {modo !== 'selfie' && (
+        {modo === 'placa' && (
+          <div
+            className="rounded-2xl p-[1px]"
+            style={{ background: 'linear-gradient(135deg, #3B82F660, transparent 50%, #3B82F630)' }}
+          >
+            <div className="bg-[#0D1229] rounded-2xl p-6 flex flex-col items-center gap-4">
+              <div className="relative">
+                <div
+                  className="w-20 h-20 rounded-3xl flex items-center justify-center"
+                  style={{ backgroundColor: '#3B82F620', boxShadow: '0 0 30px #3B82F625' }}
+                >
+                  <Square className="w-10 h-10" style={{ color: '#3B82F6' }} />
+                </div>
+              </div>
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-white">Tire uma foto da placa</h2>
+                <p className="text-sm text-white/60 mt-1">Encaixe a placa dentro da moldura.</p>
+              </div>
+
+              {fotoResultado ? (
+                <div
+                  className="relative w-full max-w-xs aspect-[3/1] rounded-xl overflow-hidden bg-black"
+                  style={{ border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' }}
+                >
+                  <img src={fotoResultado.url} alt="Placa capturada" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div
+                  className="relative w-full max-w-xs aspect-[3/1] rounded-xl overflow-hidden bg-black"
+                  style={cameraAtiva ? { border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' } : undefined}
+                >
+                  <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
+                  {cameraAtiva && (
+                    <>
+                      <div className="absolute -top-1 -left-1 w-7 h-7 border-t-4 border-l-4 rounded-tl-lg" style={{ borderColor: '#22C55E' }} />
+                      <div className="absolute -top-1 -right-1 w-7 h-7 border-t-4 border-r-4 rounded-tr-lg" style={{ borderColor: '#22C55E' }} />
+                      <div className="absolute -bottom-1 -left-1 w-7 h-7 border-b-4 border-l-4 rounded-bl-lg" style={{ borderColor: '#22C55E' }} />
+                      <div className="absolute -bottom-1 -right-1 w-7 h-7 border-b-4 border-r-4 rounded-br-lg" style={{ borderColor: '#22C55E' }} />
+                    </>
+                  )}
+                  {!cameraAtiva && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/50 text-xs text-center px-4">
+                      Câmera desligada
+                    </div>
+                  )}
+                </div>
+              )}
+              <canvas ref={canvasRef} className="hidden" />
+
+              {fotoResultado ? (
+                <Button
+                  onClick={() => { setFotoResultado(null); iniciarCamera() }}
+                  className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" /> Tirar novamente
+                </Button>
+              ) : cameraAtiva ? (
+                <Button
+                  onClick={capturarFoto}
+                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" /> Tirar foto
+                </Button>
+              ) : (
+                <Button
+                  onClick={iniciarCamera}
+                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4 mr-2" /> Ligar Camera
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {modo !== 'selfie' && modo !== 'placa' && (
         <>
         {/* Preview */}
         <div className={`bg-black rounded-xl overflow-hidden relative shrink-0 ${modoCaptura ? 'h-[42vh]' : 'h-64'} ${modo === 'foto' ? 'flex items-center justify-center' : ''}`}>
@@ -390,23 +465,6 @@ export default function TesteCameraPage() {
             </div>
           ) : (
             <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
-          )}
-          {modo === 'placa' && cameraAtiva && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-6">
-              <div className="relative w-full max-w-xs aspect-[3/1]">
-                {/* Cantos da moldura, estilo scanner */}
-                <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 rounded-tl-lg" style={{ borderColor: '#22C55E' }} />
-                <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 rounded-tr-lg" style={{ borderColor: '#22C55E' }} />
-                <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 rounded-bl-lg" style={{ borderColor: '#22C55E' }} />
-                <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 rounded-br-lg" style={{ borderColor: '#22C55E' }} />
-                <div className="absolute inset-0 rounded-lg border-2 border-dashed border-white/40" />
-              </div>
-            </div>
-          )}
-          {modo === 'placa' && cameraAtiva && (
-            <div className="absolute bottom-3 left-0 right-0 text-center">
-              <span className="bg-black/60 text-white/90 text-xs px-3 py-1.5 rounded-full">Encaixe a placa na moldura</span>
-            </div>
           )}
           <canvas ref={canvasRef} className="hidden" />
           {!cameraAtiva && (
