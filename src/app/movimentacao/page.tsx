@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Camera, Search, X, RotateCcw, LogIn, LogOut, Gauge, Activity, RefreshCw, FileText, CheckCircle2, Building2, DoorOpen, Users, Fuel, Video, ChevronLeft, Loader2, AlertTriangle, ChevronRight, CircleDot, MessageSquare, ImageIcon, ClipboardList, Radio, HelpCircle, Eye, Send, MapPin, XCircle } from 'lucide-react'
+import { Camera, Search, X, RotateCcw, LogIn, LogOut, Gauge, Activity, RefreshCw, FileText, CheckCircle2, Building2, DoorOpen, Users, Fuel, Video, ChevronLeft, Loader2, AlertTriangle, ChevronRight, CircleDot, MessageSquare, ImageIcon, ClipboardList, Radio, HelpCircle, Eye, Send, MapPin, XCircle, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -444,6 +444,85 @@ export default function MovimentacaoPage() {
   const [carregandoNovoSub, setCarregandoNovoSub] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Camera propria (com moldura-guia) pra foto da placa na tela de Funcoes
+  const [placaCameraAtiva, setPlacaCameraAtiva] = useState(false)
+  const [erroPlacaCamera, setErroPlacaCamera] = useState('')
+  const [isMobile, setIsMobile] = useState(true)
+  const placaPreviewRef = useRef<HTMLVideoElement>(null)
+  const placaStreamRef = useRef<MediaStream | null>(null)
+  const placaCanvasRef = useRef<HTMLCanvasElement>(null)
+  const placaBoxRef = useRef<HTMLDivElement>(null)
+  const PLACA_GUIDE_W = 176
+  const PLACA_GUIDE_H = Math.round((PLACA_GUIDE_W * 7) / 8)
+
+  useEffect(() => {
+    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
+    return () => {
+      placaStreamRef.current?.getTracks().forEach((t) => t.stop())
+    }
+  }, [])
+
+  async function iniciarCameraPlaca() {
+    setErroPlacaCamera('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      })
+      placaStreamRef.current = stream
+      if (placaPreviewRef.current) {
+        placaPreviewRef.current.srcObject = stream
+        await placaPreviewRef.current.play().catch(() => {})
+      }
+      setPlacaCameraAtiva(true)
+    } catch (err) {
+      setErroPlacaCamera(`Erro ao acessar a camera: ${String(err)}`)
+    }
+  }
+
+  function pararCameraPlaca() {
+    placaStreamRef.current?.getTracks().forEach((t) => t.stop())
+    placaStreamRef.current = null
+    setPlacaCameraAtiva(false)
+  }
+
+  function capturarFotoPlaca() {
+    const video = placaPreviewRef.current
+    const canvas = placaCanvasRef.current
+    const box = placaBoxRef.current
+    if (!video || !canvas || !box) return
+    const rect = box.getBoundingClientRect()
+    const videoW = video.videoWidth
+    const videoH = video.videoHeight
+    const scale = Math.max(rect.width / videoW, rect.height / videoH)
+    const offsetX = (rect.width - videoW * scale) / 2
+    const offsetY = (rect.height - videoH * scale) / 2
+    const winX = (rect.width - PLACA_GUIDE_W) / 2
+    const winY = (rect.height - PLACA_GUIDE_H) / 2
+    const srcX = (winX - offsetX) / scale
+    const srcY = (winY - offsetY) / scale
+    const srcW = PLACA_GUIDE_W / scale
+    const srcH = PLACA_GUIDE_H / scale
+    canvas.width = Math.round(srcW)
+    canvas.height = Math.round(srcH)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height)
+    pararCameraPlaca()
+
+    setResultado(null)
+    setErro(null)
+    setAcao(null)
+    setVeiculoFuncoes(null)
+    setVistoriasDisponiveis([])
+    setTipoSelecionado(null)
+    setKmDisponibilidade('')
+    setCombustivelDisponibilidade('')
+    setVideoDisponibilidadeFile(null)
+    processarFotoPlaca(canvas.toDataURL('image/jpeg', 0.85))
+  }
+
   const videoRef = useRef<HTMLInputElement>(null)
   const fotoDevRef = useRef<HTMLInputElement>(null)
   const [fotoDevAtual, setFotoDevAtual] = useState<string | null>(null)
@@ -991,6 +1070,25 @@ export default function MovimentacaoPage() {
     } catch {}
   }, [])
 
+  function processarFotoPlaca(dataUrl: string) {
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 800
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const compressed = canvas.toDataURL('image/jpeg', 0.7)
+      const b64 = compressed.split(',')[1]
+      setFoto(compressed)
+      setBase64(b64)
+      analisarPlaca(b64)
+    }
+    img.src = dataUrl
+  }
+
   function onFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -1004,25 +1102,7 @@ export default function MovimentacaoPage() {
     setCombustivelDisponibilidade('')
     setVideoDisponibilidadeFile(null)
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      const img = new Image()
-      img.onload = () => {
-        const MAX = 800
-        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
-        const canvas = document.createElement('canvas')
-        canvas.width = Math.round(img.width * scale)
-        canvas.height = Math.round(img.height * scale)
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        const compressed = canvas.toDataURL('image/jpeg', 0.7)
-        const b64 = compressed.split(',')[1]
-        setFoto(compressed)
-        setBase64(b64)
-        analisarPlaca(b64)
-      }
-      img.src = dataUrl
-    }
+    reader.onload = (ev) => processarFotoPlaca(ev.target?.result as string)
     reader.readAsDataURL(file)
   }
 
@@ -1123,6 +1203,8 @@ export default function MovimentacaoPage() {
     setVideoDisponibilidadeFile(null)
     resetDevolucao()
     if (inputRef.current) inputRef.current.value = ''
+    pararCameraPlaca()
+    setErroPlacaCamera('')
   }
 
   // Stepper visual para devolução
@@ -1228,18 +1310,57 @@ export default function MovimentacaoPage() {
       <div className="max-w-md mx-auto space-y-6">
 
         {!foto ? (
-          <button
-            onClick={() => inputRef.current?.click()}
-            className="w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-          >
-            <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
-              <Camera className="w-8 h-8" />
+          placaCameraAtiva ? (
+            <div className="bg-white border rounded-xl p-4 space-y-3">
+              <div ref={placaBoxRef} className="relative w-full h-64 rounded-xl overflow-hidden bg-black">
+                <video ref={placaPreviewRef} muted playsInline className="w-full h-full object-cover" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {/* Janela recortada: escurece tudo fora da moldura, sem cortar o preview da camera */}
+                  <div
+                    className="relative w-44 aspect-[8/7] rounded-xl"
+                    style={{ boxShadow: '0 0 0 999px rgba(0,0,0,0.6)', border: '3px solid #3B82F6' }}
+                  >
+                    <div className="absolute -top-1 -left-1 w-7 h-7 border-t-4 border-l-4 rounded-tl-lg" style={{ borderColor: '#22C55E' }} />
+                    <div className="absolute -top-1 -right-1 w-7 h-7 border-t-4 border-r-4 rounded-tr-lg" style={{ borderColor: '#22C55E' }} />
+                    <div className="absolute -bottom-1 -left-1 w-7 h-7 border-b-4 border-l-4 rounded-bl-lg" style={{ borderColor: '#22C55E' }} />
+                    <div className="absolute -bottom-1 -right-1 w-7 h-7 border-b-4 border-r-4 rounded-br-lg" style={{ borderColor: '#22C55E' }} />
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">Encaixe a placa dentro da moldura.</p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={pararCameraPlaca} className="px-4">
+                  <RotateCcw className="w-4 h-4" />
+                </Button>
+                <Button onClick={capturarFotoPlaca} className="flex-1">
+                  <Camera className="w-4 h-4 mr-2" /> Tirar foto
+                </Button>
+              </div>
             </div>
-            <div className="text-center">
-              <span className="text-sm font-medium block">Tirar foto da placa</span>
-              <span className="text-xs text-muted-foreground/70">Aponte a câmera para a placa</span>
+          ) : (
+            <div className="space-y-2">
+              <button
+                onClick={iniciarCameraPlaca}
+                className="w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+              >
+                <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
+                  <Camera className="w-8 h-8" />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-medium block">Tirar foto da placa</span>
+                  <span className="text-xs text-muted-foreground/70">Aponte a câmera para a placa</span>
+                </div>
+              </button>
+              {!isMobile && (
+                <Button variant="outline" onClick={() => inputRef.current?.click()} className="w-full">
+                  <Upload className="w-4 h-4 mr-2" /> Enviar foto
+                </Button>
+              )}
+              {erroPlacaCamera && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">{erroPlacaCamera}</div>
+              )}
             </div>
-          </button>
+          )
         ) : (
           <div className="relative rounded-xl overflow-hidden h-40">
             <img src={foto} alt="Placa" className="w-full h-full object-contain rounded-xl bg-black" />
@@ -1260,6 +1381,7 @@ export default function MovimentacaoPage() {
           className="hidden"
           onChange={onFotoChange}
         />
+        <canvas ref={placaCanvasRef} className="hidden" />
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Placa</label>

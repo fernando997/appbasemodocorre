@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Camera, Circle, Square, Download, RotateCcw, Video as VideoIcon, ImageIcon } from 'lucide-react'
+import { Camera, Circle, Square, Download, RotateCcw, Video as VideoIcon, ImageIcon, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 
@@ -57,6 +57,8 @@ export default function TesteCameraPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const placaBoxRef = useRef<HTMLDivElement>(null)
+  const placaUploadRef = useRef<HTMLInputElement>(null)
+  const [isMobile, setIsMobile] = useState(true)
 
   // Tamanho fixo (em px) da janela-guia da placa — precisa bater com as
   // classes w-44/aspect-[8/7] usadas no JSX pra recortar certo na captura
@@ -71,6 +73,7 @@ export default function TesteCameraPage() {
     } catch {
       setAutorizado(false)
     }
+    setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
   }, [])
 
   useEffect(() => {
@@ -105,6 +108,18 @@ export default function TesteCameraPage() {
     } catch (err) {
       setErro(`Erro ao acessar a câmera: ${String(err)}`)
     }
+  }
+
+  function onUploadPlaca(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = reader.result as string
+      setFotoResultado({ url, tamanho: file.size })
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
   }
 
   function pararCamera() {
@@ -402,29 +417,17 @@ export default function TesteCameraPage() {
         )}
 
         {modo === 'placa' && (
-          <div
-            className="rounded-2xl p-[1px]"
-            style={{ background: 'linear-gradient(135deg, #3B82F660, transparent 50%, #3B82F630)' }}
-          >
-            <div className="bg-[#0D1229] rounded-2xl p-6 flex flex-col items-center gap-4">
-              <div className="relative">
-                <div
-                  className="w-20 h-20 rounded-3xl flex items-center justify-center"
-                  style={{ backgroundColor: '#3B82F620', boxShadow: '0 0 30px #3B82F625' }}
-                >
-                  <Square className="w-10 h-10" style={{ color: '#3B82F6' }} />
-                </div>
-              </div>
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-white">Tire uma foto da placa</h2>
-                <p className="text-sm text-white/60 mt-1">Encaixe a placa dentro da moldura.</p>
-              </div>
+          <div className="bg-white border rounded-xl p-6 flex flex-col items-center gap-4">
+            <div className="w-20 h-20 rounded-3xl bg-blue-50 flex items-center justify-center">
+              <Square className="w-10 h-10 text-blue-600" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-xl font-bold">Tire uma foto da placa</h2>
+              <p className="text-sm text-muted-foreground mt-1">Encaixe a placa dentro da moldura.</p>
+            </div>
 
               {fotoResultado ? (
-                <div
-                  className="relative w-full rounded-xl overflow-hidden bg-black"
-                  style={{ border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' }}
-                >
+                <div className="relative w-full rounded-xl overflow-hidden bg-black border-2 border-blue-500">
                   <img src={fotoResultado.url} alt="Placa capturada" className="w-full h-auto" />
                 </div>
               ) : (
@@ -452,30 +455,47 @@ export default function TesteCameraPage() {
                 </div>
               )}
               <canvas ref={canvasRef} className="hidden" />
+              <input ref={placaUploadRef} type="file" accept="image/*" className="hidden" onChange={onUploadPlaca} />
 
               {fotoResultado ? (
-                <Button
-                  onClick={() => { setFotoResultado(null); iniciarCamera() }}
-                  className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
-                >
-                  <Camera className="w-4 h-4 mr-2" /> Tirar novamente
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => { setFotoResultado(null); iniciarCamera() }}
+                    className="min-h-[44px]"
+                  >
+                    <Camera className="w-4 h-4 mr-2" /> Tirar novamente
+                  </Button>
+                  {!isMobile && (
+                    <Button
+                      variant="outline"
+                      onClick={() => { setFotoResultado(null); placaUploadRef.current?.click() }}
+                      className="min-h-[44px]"
+                    >
+                      <Upload className="w-4 h-4 mr-2" /> Enviar outra
+                    </Button>
+                  )}
+                </div>
               ) : cameraAtiva ? (
-                <Button
-                  onClick={capturarFoto}
-                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
-                >
+                <Button onClick={capturarFoto} className="min-h-[44px]">
                   <Camera className="w-4 h-4 mr-2" /> Tirar foto
                 </Button>
               ) : (
-                <Button
-                  onClick={iniciarCamera}
-                  className="bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white min-h-[44px]"
-                >
-                  <Camera className="w-4 h-4 mr-2" /> Ligar Camera
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={iniciarCamera} className="min-h-[44px]">
+                    <Camera className="w-4 h-4 mr-2" /> Ligar Camera
+                  </Button>
+                  {!isMobile && (
+                    <Button
+                      variant="outline"
+                      onClick={() => placaUploadRef.current?.click()}
+                      className="min-h-[44px]"
+                    >
+                      <Upload className="w-4 h-4 mr-2" /> Enviar foto
+                    </Button>
+                  )}
+                </div>
               )}
-            </div>
           </div>
         )}
 
