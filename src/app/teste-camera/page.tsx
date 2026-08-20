@@ -392,24 +392,27 @@ export default function TesteCameraPage() {
 
               {fotoResultado ? (
                 <div
-                  className="relative w-56 aspect-[8/7] rounded-xl overflow-hidden bg-black"
+                  className="relative w-full rounded-xl overflow-hidden bg-black"
                   style={{ border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' }}
                 >
-                  <img src={fotoResultado.url} alt="Placa capturada" className="w-full h-full object-cover" />
+                  <img src={fotoResultado.url} alt="Placa capturada" className="w-full h-auto" />
                 </div>
               ) : (
-                <div
-                  className="relative w-56 aspect-[8/7] rounded-xl overflow-hidden bg-black"
-                  style={cameraAtiva ? { border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' } : undefined}
-                >
+                <div className="relative w-full h-64 rounded-xl overflow-hidden bg-black">
                   <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
                   {cameraAtiva && (
-                    <>
-                      <div className="absolute -top-1 -left-1 w-7 h-7 border-t-4 border-l-4 rounded-tl-lg" style={{ borderColor: '#22C55E' }} />
-                      <div className="absolute -top-1 -right-1 w-7 h-7 border-t-4 border-r-4 rounded-tr-lg" style={{ borderColor: '#22C55E' }} />
-                      <div className="absolute -bottom-1 -left-1 w-7 h-7 border-b-4 border-l-4 rounded-bl-lg" style={{ borderColor: '#22C55E' }} />
-                      <div className="absolute -bottom-1 -right-1 w-7 h-7 border-b-4 border-r-4 rounded-br-lg" style={{ borderColor: '#22C55E' }} />
-                    </>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      {/* Janela recortada: escurece tudo fora da moldura, sem cortar o preview da camera */}
+                      <div
+                        className="relative w-44 aspect-[8/7] rounded-xl"
+                        style={{ boxShadow: '0 0 0 999px rgba(0,0,0,0.6)', border: '3px solid #3B82F6' }}
+                      >
+                        <div className="absolute -top-1 -left-1 w-7 h-7 border-t-4 border-l-4 rounded-tl-lg" style={{ borderColor: '#22C55E' }} />
+                        <div className="absolute -top-1 -right-1 w-7 h-7 border-t-4 border-r-4 rounded-tr-lg" style={{ borderColor: '#22C55E' }} />
+                        <div className="absolute -bottom-1 -left-1 w-7 h-7 border-b-4 border-l-4 rounded-bl-lg" style={{ borderColor: '#22C55E' }} />
+                        <div className="absolute -bottom-1 -right-1 w-7 h-7 border-b-4 border-r-4 rounded-br-lg" style={{ borderColor: '#22C55E' }} />
+                      </div>
+                    </div>
                   )}
                   {!cameraAtiva && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white/50 text-xs text-center px-4">
