@@ -392,14 +392,14 @@ export default function TesteCameraPage() {
 
               {fotoResultado ? (
                 <div
-                  className="relative w-full max-w-xs aspect-[3/1] rounded-xl overflow-hidden bg-black"
+                  className="relative w-56 aspect-[8/7] rounded-xl overflow-hidden bg-black"
                   style={{ border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' }}
                 >
                   <img src={fotoResultado.url} alt="Placa capturada" className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div
-                  className="relative w-full max-w-xs aspect-[3/1] rounded-xl overflow-hidden bg-black"
+                  className="relative w-56 aspect-[8/7] rounded-xl overflow-hidden bg-black"
                   style={cameraAtiva ? { border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' } : undefined}
                 >
                   <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
