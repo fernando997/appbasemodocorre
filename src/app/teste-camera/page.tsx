@@ -56,6 +56,12 @@ export default function TesteCameraPage() {
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const placaBoxRef = useRef<HTMLDivElement>(null)
+
+  // Tamanho fixo (em px) da janela-guia da placa — precisa bater com as
+  // classes w-44/aspect-[8/7] usadas no JSX pra recortar certo na captura
+  const PLACA_GUIDE_W = 176
+  const PLACA_GUIDE_H = Math.round((PLACA_GUIDE_W * 7) / 8)
 
   useEffect(() => {
     try {
@@ -113,16 +119,40 @@ export default function TesteCameraPage() {
     const video = previewRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    if (modo === 'foto' || modo === 'selfie') {
-      // Câmera frontal: espelha a captura pra bater com o preview (efeito selfie)
-      ctx.translate(canvas.width, 0)
-      ctx.scale(-1, 1)
+
+    if (modo === 'placa') {
+      // Video usa object-cover dentro do container — precisa recalcular o
+      // recorte da janela-guia em coordenadas do video de origem
+      const box = placaBoxRef.current
+      if (!box) return
+      const rect = box.getBoundingClientRect()
+      const videoW = video.videoWidth
+      const videoH = video.videoHeight
+      const scale = Math.max(rect.width / videoW, rect.height / videoH)
+      const offsetX = (rect.width - videoW * scale) / 2
+      const offsetY = (rect.height - videoH * scale) / 2
+      const winX = (rect.width - PLACA_GUIDE_W) / 2
+      const winY = (rect.height - PLACA_GUIDE_H) / 2
+      const srcX = (winX - offsetX) / scale
+      const srcY = (winY - offsetY) / scale
+      const srcW = PLACA_GUIDE_W / scale
+      const srcH = PLACA_GUIDE_H / scale
+      canvas.width = Math.round(srcW)
+      canvas.height = Math.round(srcH)
+      ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height)
+    } else {
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      if (modo === 'foto' || modo === 'selfie') {
+        // Câmera frontal: espelha a captura pra bater com o preview (efeito selfie)
+        ctx.translate(canvas.width, 0)
+        ctx.scale(-1, 1)
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
     const url = canvas.toDataURL('image/jpeg', 0.75)
     const tamanho = Math.round((url.length * 3) / 4) // base64 -> bytes aproximado
     setFotoResultado({ url, tamanho })
@@ -398,7 +428,7 @@ export default function TesteCameraPage() {
                   <img src={fotoResultado.url} alt="Placa capturada" className="w-full h-auto" />
                 </div>
               ) : (
-                <div className="relative w-full h-64 rounded-xl overflow-hidden bg-black">
+                <div ref={placaBoxRef} className="relative w-full h-64 rounded-xl overflow-hidden bg-black">
                   <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
                   {cameraAtiva && (
                     <div className="absolute inset-0 flex items-center justify-center">
