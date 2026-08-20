@@ -37,7 +37,7 @@ function fmtMB(bytes: number): string {
 }
 
 export default function TesteCameraPage() {
-  const [modo, setModo] = useState<'video' | 'foto' | 'selfie'>('video')
+  const [modo, setModo] = useState<'video' | 'foto' | 'selfie' | 'placa'>('video')
   const [resolucao, setResolucao] = useState<(typeof RESOLUCOES)[number]>(RESOLUCOES[0])
   const [bitrate, setBitrate] = useState<(typeof BITRATES)[number]>(BITRATES[0])
   const [autorizado, setAutorizado] = useState<boolean | null>(null)
@@ -78,11 +78,14 @@ export default function TesteCameraPage() {
   async function iniciarCamera() {
     setErro('')
     try {
+      const frontal = modo === 'foto' || modo === 'selfie'
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: modo !== 'video'
+        video: frontal
           ? { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } }
-          : { facingMode: 'environment', width: { ideal: resolucao.width }, height: { ideal: resolucao.height } },
+          : modo === 'placa'
+            ? { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { facingMode: 'environment', width: { ideal: resolucao.width }, height: { ideal: resolucao.height } },
       })
       streamRef.current = stream
       if (previewRef.current) {
@@ -114,7 +117,7 @@ export default function TesteCameraPage() {
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    if (modo !== 'video') {
+    if (modo === 'foto' || modo === 'selfie') {
       // Câmera frontal: espelha a captura pra bater com o preview (efeito selfie)
       ctx.translate(canvas.width, 0)
       ctx.scale(-1, 1)
@@ -197,8 +200,8 @@ export default function TesteCameraPage() {
 
         {!cameraAtiva && (
           <>
-            {/* Toggle Vídeo/Foto/Selfie */}
-            <div className="grid grid-cols-3 gap-2">
+            {/* Toggle Vídeo/Foto/Selfie/Placa */}
+            <div className="grid grid-cols-4 gap-2">
               <button
                 onClick={() => { setModo('video'); setFotoResultado(null) }}
                 className={`py-2.5 rounded-lg text-sm font-semibold border-2 flex items-center justify-center gap-2 transition-all ${
@@ -229,6 +232,16 @@ export default function TesteCameraPage() {
               >
                 <Camera className="w-4 h-4" /> Selfie
               </button>
+              <button
+                onClick={() => { setModo('placa'); setResultado(null) }}
+                className={`py-2.5 rounded-lg text-sm font-semibold border-2 flex items-center justify-center gap-2 transition-all ${
+                  modo === 'placa'
+                    ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md'
+                    : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
+                }`}
+              >
+                <Square className="w-4 h-4" /> Placa
+              </button>
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
@@ -236,7 +249,9 @@ export default function TesteCameraPage() {
                 ? 'Testa gravação com resolução/bitrate limitados desde o começo, em vez de comprimir depois.'
                 : modo === 'foto'
                   ? 'Testa captura de foto (câmera frontal) com moldura de rosto, qualidade JPEG 75%.'
-                  : 'Prévia exata do card da etapa de selfie da vistoria de entrega, ainda sem aplicar lá.'}
+                  : modo === 'selfie'
+                    ? 'Prévia exata do card da etapa de selfie da vistoria de entrega, ainda sem aplicar lá.'
+                    : 'Câmera traseira com moldura retangular guia pra foto de placa, prototipo pra substituir a câmera nativa do celular.'}
               {' '}Nada aqui é enviado pra lugar nenhum.
             </div>
 
@@ -375,6 +390,23 @@ export default function TesteCameraPage() {
             </div>
           ) : (
             <video ref={previewRef} muted playsInline className="w-full h-full object-cover" />
+          )}
+          {modo === 'placa' && cameraAtiva && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-6">
+              <div className="relative w-full max-w-xs aspect-[3/1]">
+                {/* Cantos da moldura, estilo scanner */}
+                <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 rounded-tl-lg" style={{ borderColor: '#22C55E' }} />
+                <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 rounded-tr-lg" style={{ borderColor: '#22C55E' }} />
+                <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 rounded-bl-lg" style={{ borderColor: '#22C55E' }} />
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 rounded-br-lg" style={{ borderColor: '#22C55E' }} />
+                <div className="absolute inset-0 rounded-lg border-2 border-dashed border-white/40" />
+              </div>
+            </div>
+          )}
+          {modo === 'placa' && cameraAtiva && (
+            <div className="absolute bottom-3 left-0 right-0 text-center">
+              <span className="bg-black/60 text-white/90 text-xs px-3 py-1.5 rounded-full">Encaixe a placa na moldura</span>
+            </div>
           )}
           <canvas ref={canvasRef} className="hidden" />
           {!cameraAtiva && (
