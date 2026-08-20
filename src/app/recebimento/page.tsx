@@ -6,6 +6,7 @@ import {
   Filter, Loader2, Package, RefreshCw, Wrench, X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
+import { PlacaCameraPicker } from '@/components/placa-camera-picker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -181,8 +182,6 @@ export default function RecebimentoPage() {
   const [confirmando, setConfirmando] = useState(false)
   const confirmandoRef = useRef(false)
   const [fotoFile, setFotoFile] = useState<File | null>(null)
-  const fotoRef = useRef<HTMLInputElement>(null)
-  const fotoFiltroRef = useRef<HTMLInputElement>(null)
 
   // Dialog — câmera filtro
   const [cameraFiltroAberto, setCameraFiltroAberto] = useState(false)
@@ -293,12 +292,15 @@ export default function RecebimentoPage() {
   }
   function fecharDialog() { if (confirmando || lendoPlaca) return; setAtiva(null); setFoto(null); setFotoFile(null); setPlacaInput(''); setDadosMoto(null); setPedidoData(null); setErroChassi(null); setCorSelecionada('') }
 
-  function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
+    const blob = await (await fetch(dataUrl)).blob()
+    return new File([blob], filename, { type: blob.type || 'image/jpeg' })
+  }
+
+  async function onPlacaCapturada(dataUrl: string) {
+    const file = await dataUrlToFile(dataUrl, 'placa.jpg')
     setFoto(URL.createObjectURL(file))
     setFotoFile(file)
-    e.target.value = ''
     lerPlaca(file)
   }
 
@@ -332,13 +334,11 @@ export default function RecebimentoPage() {
     }
   }
 
-  function onFotoBusca(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function onPlacaBuscaCapturada(dataUrl: string) {
+    const file = await dataUrlToFile(dataUrl, 'placa-busca.jpg')
     const url = URL.createObjectURL(file)
     setFotoBusca(url)
     setFotoBuscaFile(file)
-    e.target.value = ''
     lerPlacaBusca(file, url)
   }
 
@@ -902,12 +902,12 @@ export default function RecebimentoPage() {
                   )}
                 </div>
               ) : (
-                <button onClick={() => fotoRef.current?.click()} className="w-full h-28 border-2 border-dashed border-zinc-300 rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-blue-400 hover:text-blue-500 transition-colors">
-                  <Camera className="w-7 h-7" />
-                  <span className="text-sm">Fotografar placa</span>
-                </button>
+                <PlacaCameraPicker
+                  onCapture={onPlacaCapturada}
+                  triggerHeightClassName="h-28"
+                  accentBorderClassName="hover:border-blue-400 hover:text-blue-500"
+                />
               )}
-              <input ref={fotoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFoto} />
             </div>
 
             <div className="space-y-1.5">
@@ -1033,12 +1033,12 @@ export default function RecebimentoPage() {
                 )}
               </div>
             ) : (
-              <button onClick={() => fotoFiltroRef.current?.click()} className="w-full h-28 border-2 border-dashed border-zinc-300 rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-blue-400 hover:text-blue-500 transition-colors">
-                <Camera className="w-7 h-7" />
-                <span className="text-sm">Fotografar placa</span>
-              </button>
+              <PlacaCameraPicker
+                onCapture={onPlacaBuscaCapturada}
+                triggerHeightClassName="h-28"
+                accentBorderClassName="hover:border-blue-400 hover:text-blue-500"
+              />
             )}
-            <input ref={fotoFiltroRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFotoBusca} />
 
             {fotoBusca && !buscandoPorFoto && (
               <div className="space-y-1.5">

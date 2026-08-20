@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useRef, useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   Camera,
@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { PlacaCameraPicker } from '@/components/placa-camera-picker'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -131,7 +132,7 @@ function LiberacaoCpfContent() {
   const [lendoPlaca, setLendoPlaca] = useState(false)
   const [foto, setFoto] = useState<string | null>(null)
   const [fotoBase64, setFotoBase64] = useState<string | null>(null)
-  const fotoRef = useRef<HTMLInputElement>(null)
+  const [placaCameraAberta, setPlacaCameraAberta] = useState(false)
 
   async function consultar() {
     if (!placa.trim() || !cpf.trim()) {
@@ -183,35 +184,24 @@ function LiberacaoCpfContent() {
 
   const validacao = resultado?.contrato ? validarLiberacao(resultado) : null
 
-  function onFotoCapturada(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (file) processarFoto(file)
-  }
-
-  function processarFoto(file: File) {
+  function processarFotoDataUrl(dataUrl: string) {
     setErro(null)
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      const img = new Image()
-      img.onload = () => {
-        const MAX = 800
-        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
-        const canvas = document.createElement('canvas')
-        canvas.width = Math.round(img.width * scale)
-        canvas.height = Math.round(img.height * scale)
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        const compressed = canvas.toDataURL('image/jpeg', 0.7)
-        const b64 = compressed.split(',')[1]
-        setFoto(compressed)
-        setFotoBase64(b64)
-        lerPlacaDaFoto(b64)
-      }
-      img.src = dataUrl
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 800
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const compressed = canvas.toDataURL('image/jpeg', 0.7)
+      const b64 = compressed.split(',')[1]
+      setFoto(compressed)
+      setFotoBase64(b64)
+      lerPlacaDaFoto(b64)
     }
-    reader.readAsDataURL(file)
+    img.src = dataUrl
   }
 
   async function lerPlacaDaFoto(b64: string) {
@@ -237,7 +227,7 @@ function LiberacaoCpfContent() {
   function limparFoto() {
     setFoto(null)
     setFotoBase64(null)
-    if (fotoRef.current) fotoRef.current.value = ''
+    setPlacaCameraAberta(false)
   }
 
   return (
@@ -276,6 +266,22 @@ function LiberacaoCpfContent() {
                     title="Remover foto"
                   >
                     <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {!foto && placaCameraAberta && (
+                <div className="space-y-2">
+                  <PlacaCameraPicker
+                    autoStart
+                    onCapture={(dataUrl) => { setPlacaCameraAberta(false); processarFotoDataUrl(dataUrl) }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPlacaCameraAberta(false)}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    Cancelar
                   </button>
                 </div>
               )}
@@ -326,8 +332,8 @@ function LiberacaoCpfContent() {
                   variant="outline"
                   className="flex-1"
                   title="Tirar foto da placa"
-                  onClick={() => fotoRef.current?.click()}
-                  disabled={consultando || lendoPlaca}
+                  onClick={() => setPlacaCameraAberta(true)}
+                  disabled={consultando || lendoPlaca || placaCameraAberta}
                 >
                   <Camera className="w-4 h-4 mr-2" />
                   {foto ? 'Nova foto' : 'Foto da placa'}
@@ -342,14 +348,6 @@ function LiberacaoCpfContent() {
                     : <><Search className="w-4 h-4 mr-2" />Buscar</>
                   }
                 </Button>
-                <input
-                  ref={fotoRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={onFotoCapturada}
-                />
               </div>
             </div>
 

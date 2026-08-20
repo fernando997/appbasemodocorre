@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { gerarPdfVistoria } from '@/lib/gerar-pdf-vistoria'
+import { PlacaCameraPicker } from '@/components/placa-camera-picker'
 import { comprimirVideo } from '@/lib/comprimir-video'
 
 // Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
@@ -429,7 +430,6 @@ export default function MovimentacaoPage() {
   const [placaNovaSub, setPlacaNovaSub] = useState('')
   const [fotoNovaSub, setFotoNovaSub] = useState<string | null>(null)
   const [analisandoNovaSub, setAnalisandoNovaSub] = useState(false)
-  const fotoNovaSubRef = useRef<HTMLInputElement>(null)
   const [testandoRastreador, setTestandoRastreador] = useState(false)
   const [rastreadorInfo, setRastreadorInfo] = useState<{ plataforma: string | null; localizacoes: Record<string, { lat: number | null; long: number | null }> } | null>(null)
   const [enderecosRastreador, setEnderecosRastreador] = useState<Record<string, string>>({})
@@ -644,47 +644,39 @@ export default function MovimentacaoPage() {
   }
 
   // Foto da placa nova → IA lê a placa → consulta os dados do veículo
-  function onFotoNovaSub(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  function processarFotoNovaSub(dataUrl: string) {
     setPlacaNovaSub('')
     setVeiculoNovoSub(null)
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      const img = new Image()
-      img.onload = async () => {
-        const MAX = 800
-        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
-        const canvas = document.createElement('canvas')
-        canvas.width = Math.round(img.width * scale)
-        canvas.height = Math.round(img.height * scale)
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        const compressed = canvas.toDataURL('image/jpeg', 0.7)
-        setFotoNovaSub(compressed)
-        const b64 = compressed.split(',')[1]
-        setAnalisandoNovaSub(true)
-        try {
-          const res = await fetch('/api/ler-placa', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: b64 }),
-          })
-          const data = await res.json()
-          if (data.placa) {
-            setPlacaNovaSub(data.placa)
-            await buscarVeiculoNovoSub(data.placa)
-          }
-        } catch {
-        } finally {
-          setAnalisandoNovaSub(false)
+    const img = new Image()
+    img.onload = async () => {
+      const MAX = 800
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const compressed = canvas.toDataURL('image/jpeg', 0.7)
+      setFotoNovaSub(compressed)
+      const b64 = compressed.split(',')[1]
+      setAnalisandoNovaSub(true)
+      try {
+        const res = await fetch('/api/ler-placa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: b64 }),
+        })
+        const data = await res.json()
+        if (data.placa) {
+          setPlacaNovaSub(data.placa)
+          await buscarVeiculoNovoSub(data.placa)
         }
+      } catch {
+      } finally {
+        setAnalisandoNovaSub(false)
       }
-      img.src = dataUrl
     }
-    reader.readAsDataURL(file)
-    e.target.value = ''
+    img.src = dataUrl
   }
 
   async function buscarVeiculoNovoSub(placaEscolhida: string) {
@@ -2798,8 +2790,6 @@ export default function MovimentacaoPage() {
             </div>
 
             <div className="p-5 space-y-4">
-              <input ref={fotoNovaSubRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFotoNovaSub} />
-
               {/* Foto da placa nova */}
               {fotoNovaSub ? (
                 <div className="relative">
@@ -2812,12 +2802,14 @@ export default function MovimentacaoPage() {
                   </button>
                 </div>
               ) : (
-                <button onClick={() => fotoNovaSubRef.current?.click()} className="w-full h-44 border-2 border-dashed border-zinc-300 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground hover:border-purple-400 hover:text-purple-500 transition-colors">
-                  <div className="w-14 h-14 rounded-full bg-purple-50 flex items-center justify-center">
-                    <Camera className="w-7 h-7 text-purple-400" />
-                  </div>
-                  <span className="text-sm font-medium">Fotografar placa da moto nova</span>
-                </button>
+                <PlacaCameraPicker
+                  onCapture={processarFotoNovaSub}
+                  label="Fotografar placa da moto nova"
+                  triggerHeightClassName="h-44"
+                  accentBorderClassName="hover:border-purple-400 hover:text-purple-500"
+                  accentIconBgClassName="bg-purple-50"
+                  accentIconClassName="text-purple-400"
+                />
               )}
 
               {/* Analisando */}
