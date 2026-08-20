@@ -463,6 +463,15 @@ export default function MovimentacaoPage() {
     }
   }, [])
 
+  // O <video> só existe no DOM depois que placaCameraAtiva vira true, entao
+  // aqui reatribui o stream assim que o elemento for montado
+  useEffect(() => {
+    if (placaCameraAtiva && placaPreviewRef.current && placaStreamRef.current) {
+      placaPreviewRef.current.srcObject = placaStreamRef.current
+      placaPreviewRef.current.play().catch(() => {})
+    }
+  }, [placaCameraAtiva])
+
   async function iniciarCameraPlaca() {
     setErroPlacaCamera('')
     try {
@@ -471,10 +480,6 @@ export default function MovimentacaoPage() {
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
       })
       placaStreamRef.current = stream
-      if (placaPreviewRef.current) {
-        placaPreviewRef.current.srcObject = stream
-        await placaPreviewRef.current.play().catch(() => {})
-      }
       setPlacaCameraAtiva(true)
     } catch (err) {
       setErroPlacaCamera(`Erro ao acessar a camera: ${String(err)}`)
