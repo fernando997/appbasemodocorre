@@ -300,7 +300,12 @@ function VistoriaEntregaContent() {
   const fotosCount = Object.keys(fotos).length
 
   async function validarFacial() {
-    if (!selfie || !fotoCnhUrl) return
+    if (!selfie) return
+    if (!fotoCnhUrl) {
+      setFacialStatus('reprovado')
+      setFacialErro('Não foi possível validar: CNH não encontrada para este cliente. Contate a empresa.')
+      return
+    }
     setValidandoFacial(true)
     setFacialErro('')
     setFacialStatus('idle')
