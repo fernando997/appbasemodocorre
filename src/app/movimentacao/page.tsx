@@ -1727,7 +1727,7 @@ export default function MovimentacaoPage() {
 
             {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
               <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-gradient-to-r from-green-50 to-white px-5 py-4 flex items-center gap-3 border-b">
+                <div className="bg-gradient-to-r from-green-50 to-white px-4 sm:px-5 py-4 flex flex-wrap items-center gap-3 border-b">
                   <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                     <CheckCircle2 className="w-6 h-6 text-green-600" />
                   </div>
@@ -1738,7 +1738,7 @@ export default function MovimentacaoPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 shrink-0"
+                    className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 w-full sm:w-auto justify-center shrink-0"
                     onClick={() => testarRastreador(placa)}
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> Testar novamente
@@ -2010,7 +2010,7 @@ export default function MovimentacaoPage() {
 
               {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
                 <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
-                  <div className="bg-gradient-to-r from-green-50 to-white px-5 py-4 flex items-center gap-3 border-b">
+                  <div className="bg-gradient-to-r from-green-50 to-white px-4 sm:px-5 py-4 flex flex-wrap items-center gap-3 border-b">
                     <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                       <CheckCircle2 className="w-6 h-6 text-green-600" />
                     </div>
@@ -2021,7 +2021,7 @@ export default function MovimentacaoPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 shrink-0"
+                      className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 w-full sm:w-auto justify-center shrink-0"
                       onClick={() => testarRastreador(placa)}
                     >
                       <RefreshCw className="w-3.5 h-3.5" /> Testar novamente
@@ -2885,7 +2885,7 @@ export default function MovimentacaoPage() {
 
               {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
                 <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
-                  <div className="bg-gradient-to-r from-green-50 to-white px-5 py-4 flex items-center gap-3 border-b">
+                  <div className="bg-gradient-to-r from-green-50 to-white px-4 sm:px-5 py-4 flex flex-wrap items-center gap-3 border-b">
                     <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                       <CheckCircle2 className="w-6 h-6 text-green-600" />
                     </div>
@@ -2896,7 +2896,7 @@ export default function MovimentacaoPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 shrink-0"
+                      className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8 w-full sm:w-auto justify-center shrink-0"
                       onClick={() => testarRastreador(placaNovaSub)}
                     >
                       <RefreshCw className="w-3.5 h-3.5" /> Testar novamente
