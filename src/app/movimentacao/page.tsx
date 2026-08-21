@@ -751,10 +751,11 @@ export default function MovimentacaoPage() {
   }
 
   async function uploadArquivo(file: File): Promise<string> {
+    const tamanhoMB = (file.size / 1024 / 1024).toFixed(2)
     const form = new FormData()
     form.append('foto', file, file.name)
     const res = await fetch('/api/upload-foto', { method: 'POST', body: form })
-    if (!res.ok) throw new Error(`Upload falhou: HTTP ${res.status}`)
+    if (!res.ok) throw new Error(`Upload falhou: HTTP ${res.status} (arquivo: ${file.name}, ${tamanhoMB}MB)`)
     const data = await res.json()
     return data.url as string
   }

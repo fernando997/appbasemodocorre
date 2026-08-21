@@ -15,8 +15,8 @@ const TAMANHO_MAXIMO_BYTES = 4.3 * 1024 * 1024 // margem de segurança abaixo do
 const BITRATE_MINIMO = 150_000
 const BITRATE_MAXIMO = 4_000_000
 const DURACAO_PADRAO_S = 30 // fallback se não der pra descobrir a duração real
-const TENTATIVAS_POR_RESOLUCAO = 2 // reduzindo só o bitrate, antes de cair de resolução
-const LARGURAS_FALLBACK = [480, 360, 240] // usadas só se a largura inicial ainda estourar
+const TENTATIVAS_POR_RESOLUCAO = 3 // reduzindo só o bitrate, antes de cair de resolução
+const LARGURAS_FALLBACK = [480, 360, 240, 160] // usadas só se a largura inicial ainda estourar
 
 export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<File> {
   const larguraInicial = opcoes.maxWidth ?? 640
