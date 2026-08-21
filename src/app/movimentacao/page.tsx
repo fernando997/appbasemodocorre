@@ -412,11 +412,16 @@ export default function MovimentacaoPage() {
   const [fotosDevolucaoFiles, setFotosDevolucaoFiles] = useState<Record<string, File | null>>(FOTOS_DEVOLUCAO_INICIAL)
   const [videoAvarias, setVideoAvarias] = useState<string | null>(null)
   const [videoAvariasFile, setVideoAvariasFile] = useState<File | null>(null)
+  const [videoAvariasUrl, setVideoAvariasUrl] = useState('')
   const [videoDetalhes, setVideoDetalhes] = useState<string | null>(null)
   const [videoDetalhesFile, setVideoDetalhesFile] = useState<File | null>(null)
+  const [videoDetalhesUrl, setVideoDetalhesUrl] = useState('')
   const [violacaoRastreamento, setViolacaoRastreamento] = useState<boolean | null>(null)
   const [videoViolacao, setVideoViolacao] = useState<string | null>(null)
   const [videoViolacaoFile, setVideoViolacaoFile] = useState<File | null>(null)
+  const [videoViolacaoUrl, setVideoViolacaoUrl] = useState('')
+  const [enviandoVideoDevolucao, setEnviandoVideoDevolucao] = useState(false)
+  const [erroVideoDevolucao, setErroVideoDevolucao] = useState('')
   const [perguntasDevolucao, setPerguntasDevolucao] = useState<Record<string, boolean | null>>({
     manutencaoEstetica: null, pneusMalEstado: null, vazamentoOleo: null, motoLigando: null,
     fumandoEscapamento: null, falhando: null, batendoValvula: null, canoAdulterado: null, semFiltroAr: null,
@@ -568,22 +573,37 @@ export default function MovimentacaoPage() {
     setTimeout(() => fotoDevRef.current?.click(), 100)
   }
 
-  function onVideoDevolucao(setter: (v: string | null) => void, fileSetter: (f: File | null) => void) {
+  function onVideoDevolucao(setter: (v: string | null) => void, fileSetter: (f: File | null) => void, urlSetter: (u: string) => void) {
     return async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!file) return
       e.target.value = ''
+      setErroVideoDevolucao('')
+      urlSetter('')
       setComprimindoVideo(true)
+      let arquivo: File
       try {
-        const arquivo = await comprimirVideo(file)
-        setter(URL.createObjectURL(arquivo))
-        fileSetter(arquivo)
+        arquivo = await comprimirVideo(file)
       } catch {
         // Compressão falhou (ex: navegador sem suporte a MediaRecorder) — usa o original
-        setter(URL.createObjectURL(file))
-        fileSetter(file)
+        arquivo = file
+      }
+      setter(URL.createObjectURL(arquivo))
+      fileSetter(arquivo)
+      setComprimindoVideo(false)
+
+      // Sobe pro Bubble já aqui, na etapa — se estourar o limite, o usuário
+      // fica sabendo na hora e regrava, em vez de descobrir só no final
+      setEnviandoVideoDevolucao(true)
+      try {
+        const url = await uploadArquivo(arquivo)
+        urlSetter(url)
+      } catch (err) {
+        setErroVideoDevolucao(String(err))
+        setter(null)
+        fileSetter(null)
       } finally {
-        setComprimindoVideo(false)
+        setEnviandoVideoDevolucao(false)
       }
     }
   }
@@ -619,10 +639,11 @@ export default function MovimentacaoPage() {
     setEtapaDevolucao(0)
     setFotosDevolucao(FOTOS_DEVOLUCAO_INICIAL)
     setFotosDevolucaoFiles(FOTOS_DEVOLUCAO_INICIAL)
-    setVideoAvarias(null); setVideoAvariasFile(null)
-    setVideoDetalhes(null); setVideoDetalhesFile(null)
+    setVideoAvarias(null); setVideoAvariasFile(null); setVideoAvariasUrl('')
+    setVideoDetalhes(null); setVideoDetalhesFile(null); setVideoDetalhesUrl('')
     setViolacaoRastreamento(null)
-    setVideoViolacao(null); setVideoViolacaoFile(null)
+    setVideoViolacao(null); setVideoViolacaoFile(null); setVideoViolacaoUrl('')
+    setErroVideoDevolucao('')
     setPerguntasDevolucao({ manutencaoEstetica: null, pneusMalEstado: null, vazamentoOleo: null, motoLigando: null, fumandoEscapamento: null, falhando: null, batendoValvula: null, canoAdulterado: null, semFiltroAr: null })
     setObservacaoDevolucao('')
     setKmDevolucao('')
@@ -783,10 +804,7 @@ export default function MovimentacaoPage() {
       const localizacaoAtual = geoLocationDevolucao ?? await capturarLocalizacaoAtual()
       if (localizacaoAtual) setGeoLocationDevolucao(localizacaoAtual)
 
-      // Upload dos vídeos primeiro, pra poder linkar no PDF
-      const videoDetalhesUrl = videoDetalhesFile ? await uploadArquivo(videoDetalhesFile) : ''
-      const videoAvariasUrl = videoAvariasFile ? await uploadArquivo(videoAvariasFile) : ''
-      const videoViolacaoUrl = videoViolacaoFile ? await uploadArquivo(videoViolacaoFile) : ''
+      // Vídeos já foram enviados na própria etapa (ver onVideoDevolucao) — só reaproveita as URLs
 
       // Gerar PDF da vistoria
       const pdfBlob = await gerarPdfVistoria({
@@ -887,9 +905,8 @@ export default function MovimentacaoPage() {
       const localizacaoAtual = geoLocationDevolucao ?? await capturarLocalizacaoAtual()
       if (localizacaoAtual) setGeoLocationDevolucao(localizacaoAtual)
 
-      // Upload do vídeo da moto ANTIGA primeiro, pra poder linkar no PDF
-      const videoAntigaUrl = videoAvariasFile ? await uploadArquivo(videoAvariasFile) : ''
-      const videoViolacaoUrl = videoViolacaoFile ? await uploadArquivo(videoViolacaoFile) : ''
+      // Vídeo da moto ANTIGA já foi enviado na própria etapa (ver onVideoDevolucao)
+      const videoAntigaUrl = videoAvariasUrl
 
       // PDF da moto ANTIGA (saindo) — mesmo formato da Devolução
       const pdfAntigaBlob = await gerarPdfVistoria({
@@ -2222,9 +2239,9 @@ export default function MovimentacaoPage() {
 
               {/* Inputs ocultos para fotos/vídeos */}
               <input ref={fotoDevRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFotoDevolucao} />
-              <input ref={videoAvariasRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={onVideoDevolucao(setVideoAvarias, setVideoAvariasFile)} />
-              <input ref={videoDetalhesRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={onVideoDevolucao(setVideoDetalhes, setVideoDetalhesFile)} />
-              <input ref={videoViolacaoRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={onVideoDevolucao(setVideoViolacao, setVideoViolacaoFile)} />
+              <input ref={videoAvariasRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={onVideoDevolucao(setVideoAvarias, setVideoAvariasFile, setVideoAvariasUrl)} />
+              <input ref={videoDetalhesRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={onVideoDevolucao(setVideoDetalhes, setVideoDetalhesFile, setVideoDetalhesUrl)} />
+              <input ref={videoViolacaoRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={onVideoDevolucao(setVideoViolacao, setVideoViolacaoFile, setVideoViolacaoUrl)} />
 
               {/* ── ETAPA 0: Alerta + Fotos ── */}
               {etapaDevolucao === 0 && (
@@ -2333,10 +2350,17 @@ export default function MovimentacaoPage() {
                     ) : videoAvarias ? (
                       <div className="relative">
                         <video src={videoAvarias} controls className="w-full rounded-xl border-2 border-green-300 max-h-72 lg:max-h-96" />
-                        <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
-                          <CheckCircle2 className="w-4 h-4 text-white" />
-                        </div>
-                        <button onClick={() => { setVideoAvarias(null); setVideoAvariasFile(null) }} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white">
+                        {enviandoVideoDevolucao ? (
+                          <div className="absolute inset-0 bg-black/50 rounded-xl flex flex-col items-center justify-center gap-2 text-white">
+                            <Loader2 className="w-6 h-6 animate-spin" />
+                            <span className="text-xs font-medium">Enviando vídeo...</span>
+                          </div>
+                        ) : (
+                          <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
+                            <CheckCircle2 className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                        <button onClick={() => { setVideoAvarias(null); setVideoAvariasFile(null); setVideoAvariasUrl('') }} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
@@ -2349,11 +2373,15 @@ export default function MovimentacaoPage() {
                       </button>
                     )}
 
+                    {erroVideoDevolucao && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erroVideoDevolucao}</p>
+                    )}
+
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Button variant="outline" className="gap-1 h-12" onClick={() => setEtapaDevolucao(0)}>
                         <ChevronLeft className="w-3.5 h-3.5" /> Voltar
                       </Button>
-                      <Button className="flex-1 gap-2 bg-red-600 hover:bg-red-700 h-12" disabled={!videoAvariasFile} onClick={() => setEtapaDevolucao(tipoSelecionado === 'SUBSTITUIÇÃO' ? 3 : 2)}>
+                      <Button className="flex-1 gap-2 bg-red-600 hover:bg-red-700 h-12" disabled={!videoAvariasUrl || enviandoVideoDevolucao} onClick={() => setEtapaDevolucao(tipoSelecionado === 'SUBSTITUIÇÃO' ? 3 : 2)}>
                         {tipoSelecionado === 'SUBSTITUIÇÃO' ? 'Próximo: Rastreio' : 'Próximo: Vídeo Detalhes'} <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
@@ -2390,10 +2418,17 @@ export default function MovimentacaoPage() {
                     ) : videoDetalhes ? (
                       <div className="relative">
                         <video src={videoDetalhes} controls className="w-full rounded-xl border-2 border-green-300 max-h-72 lg:max-h-96" />
-                        <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
-                          <CheckCircle2 className="w-4 h-4 text-white" />
-                        </div>
-                        <button onClick={() => { setVideoDetalhes(null); setVideoDetalhesFile(null) }} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white">
+                        {enviandoVideoDevolucao ? (
+                          <div className="absolute inset-0 bg-black/50 rounded-xl flex flex-col items-center justify-center gap-2 text-white">
+                            <Loader2 className="w-6 h-6 animate-spin" />
+                            <span className="text-xs font-medium">Enviando vídeo...</span>
+                          </div>
+                        ) : (
+                          <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
+                            <CheckCircle2 className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                        <button onClick={() => { setVideoDetalhes(null); setVideoDetalhesFile(null); setVideoDetalhesUrl('') }} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
@@ -2406,11 +2441,15 @@ export default function MovimentacaoPage() {
                       </button>
                     )}
 
+                    {erroVideoDevolucao && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erroVideoDevolucao}</p>
+                    )}
+
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Button variant="outline" className="gap-1 h-12" onClick={() => setEtapaDevolucao(1)}>
                         <ChevronLeft className="w-3.5 h-3.5" /> Voltar
                       </Button>
-                      <Button className="flex-1 gap-2 bg-red-600 hover:bg-red-700 h-12" disabled={!videoDetalhesFile} onClick={() => setEtapaDevolucao(3)}>
+                      <Button className="flex-1 gap-2 bg-red-600 hover:bg-red-700 h-12" disabled={!videoDetalhesUrl || enviandoVideoDevolucao} onClick={() => setEtapaDevolucao(3)}>
                         Próximo: Rastreamento <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
@@ -2436,7 +2475,7 @@ export default function MovimentacaoPage() {
                         Sim
                       </button>
                       <button
-                        onClick={() => { setViolacaoRastreamento(false); setVideoViolacao(null); setVideoViolacaoFile(null) }}
+                        onClick={() => { setViolacaoRastreamento(false); setVideoViolacao(null); setVideoViolacaoFile(null); setVideoViolacaoUrl(''); setErroVideoDevolucao('') }}
                         className={`py-5 rounded-xl text-sm font-medium border-2 transition-all flex flex-col items-center gap-2 ${violacaoRastreamento === false ? 'border-green-500 bg-green-50 text-green-700 shadow-md scale-[1.02]' : 'border-zinc-200 text-muted-foreground hover:border-green-300'}`}
                       >
                         <CheckCircle2 className={`w-6 h-6 ${violacaoRastreamento === false ? 'text-green-500' : 'text-zinc-300'}`} />
@@ -2455,10 +2494,17 @@ export default function MovimentacaoPage() {
                         ) : videoViolacao ? (
                           <div className="relative">
                             <video src={videoViolacao} controls className="w-full rounded-xl border-2 border-green-300 max-h-72 lg:max-h-96" />
-                            <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
-                              <CheckCircle2 className="w-4 h-4 text-white" />
-                            </div>
-                            <button onClick={() => { setVideoViolacao(null); setVideoViolacaoFile(null) }} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white">
+                            {enviandoVideoDevolucao ? (
+                              <div className="absolute inset-0 bg-black/50 rounded-xl flex flex-col items-center justify-center gap-2 text-white">
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                                <span className="text-xs font-medium">Enviando vídeo...</span>
+                              </div>
+                            ) : (
+                              <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1">
+                                <CheckCircle2 className="w-4 h-4 text-white" />
+                              </div>
+                            )}
+                            <button onClick={() => { setVideoViolacao(null); setVideoViolacaoFile(null); setVideoViolacaoUrl('') }} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white">
                               <X className="w-4 h-4" />
                             </button>
                           </div>
@@ -2473,13 +2519,17 @@ export default function MovimentacaoPage() {
                       </div>
                     )}
 
+                    {erroVideoDevolucao && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erroVideoDevolucao}</p>
+                    )}
+
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Button variant="outline" className="gap-1 h-12" onClick={() => setEtapaDevolucao(tipoSelecionado === 'SUBSTITUIÇÃO' ? 1 : 2)}>
                         <ChevronLeft className="w-3.5 h-3.5" /> Voltar
                       </Button>
                       <Button
                         className="flex-1 gap-2 bg-red-600 hover:bg-red-700 h-12"
-                        disabled={violacaoRastreamento === null || (violacaoRastreamento === true && !videoViolacaoFile)}
+                        disabled={violacaoRastreamento === null || enviandoVideoDevolucao || (violacaoRastreamento === true && !videoViolacaoUrl)}
                         onClick={() => setEtapaDevolucao(4)}
                       >
                         Próximo: Perguntas <ChevronRight className="w-4 h-4" />
