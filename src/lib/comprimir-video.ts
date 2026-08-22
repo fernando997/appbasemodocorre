@@ -18,8 +18,20 @@ const DURACAO_PADRAO_S = 30 // fallback se não der pra descobrir a duração re
 const TENTATIVAS_POR_RESOLUCAO = 3 // reduzindo só o bitrate, antes de cair de resolução
 const LARGURAS_FALLBACK = [480, 360, 240, 160] // usadas só se a largura inicial ainda estourar
 
+// Safari/iOS não sabe gravar WebM (nenhuma versão) — só MP4/H.264. Se a lista
+// não tiver nenhum formato suportado, MediaRecorder() lança erro na hora de
+// criar o gravador, ainda antes de qualquer tentativa de compressão.
+const CANDIDATOS_MIME = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4']
+
+function escolherMimeType(): string {
+  const suportado = CANDIDATOS_MIME.find(t => MediaRecorder.isTypeSupported(t))
+  if (!suportado) throw new Error('Nenhum formato de vídeo suportado neste navegador')
+  return suportado
+}
+
 export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<File> {
   const larguraInicial = opcoes.maxWidth ?? 640
+  const mimeType = escolherMimeType()
   const url = URL.createObjectURL(file)
   const videoEl = document.createElement('video')
   videoEl.muted = true
@@ -43,15 +55,17 @@ export async function comprimirVideo(file: File, opcoes: Opcoes = {}): Promise<F
       let videoBitsPerSecond = opcoes.videoBitsPerSecond ?? calcularBitrate(duracao)
 
       for (let tentativa = 0; tentativa < TENTATIVAS_POR_RESOLUCAO; tentativa++) {
-        blob = await gravar(videoEl, canvas, ctx, videoBitsPerSecond)
+        blob = await gravar(videoEl, canvas, ctx, videoBitsPerSecond, mimeType)
         if (blob.size <= TAMANHO_MAXIMO_BYTES) break resolucoes
         // Bitrate real saiu maior que o previsto — reduz proporcionalmente ao excesso e tenta de novo
         videoBitsPerSecond = Math.max(BITRATE_MINIMO, Math.round(videoBitsPerSecond * (TAMANHO_ALVO_BYTES / blob.size)))
       }
     }
 
-    const novoNome = file.name.replace(/\.\w+$/, '') + '.webm'
-    return new File([blob!], novoNome, { type: 'video/webm' })
+    const extensao = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm'
+    const tipoArquivo = mimeType.startsWith('video/mp4') ? 'video/mp4' : 'video/webm'
+    const novoNome = file.name.replace(/\.\w+$/, '') + '.' + extensao
+    return new File([blob!], novoNome, { type: tipoArquivo })
   } finally {
     URL.revokeObjectURL(url)
   }
@@ -97,16 +111,13 @@ function obterDuracao(videoEl: HTMLVideoElement): Promise<number> {
   })
 }
 
-function gravar(videoEl: HTMLVideoElement, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, videoBitsPerSecond: number): Promise<Blob> {
+function gravar(videoEl: HTMLVideoElement, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, videoBitsPerSecond: number, mimeType: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const stream = canvas.captureStream(30)
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : 'video/webm'
     const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond })
     const chunks: Blob[] = []
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
-    recorder.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }))
+    recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }))
     recorder.onerror = () => reject(new Error('Erro ao comprimir vídeo'))
 
     videoEl.onended = () => recorder.stop()
