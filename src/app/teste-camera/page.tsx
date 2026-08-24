@@ -4,41 +4,22 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera, Circle, Square, Download, RotateCcw, Video as VideoIcon, ImageIcon, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
+import {
+  RESOLUCAO_VISTORIA,
+  BITRATE_VISTORIA_PADRAO,
+  TAMANHO_MAXIMO_BYTES,
+  calcularDuracaoMaxima,
+  bitrateParaDispositivo,
+  escolherMimeTypeVideo,
+} from '@/lib/gravacao-video'
 
 // Tela isolada só pra testar câmera própria (getUserMedia + MediaRecorder) com
 // resolução/bitrate limitados NA GRAVAÇÃO, em vez de comprimir depois.
 // Também testa captura de FOTO (getUserMedia + canvas) com moldura de rosto,
 // prototipo pra etapa de selfie da vistoria de entrega.
-// Não está ligada a nenhuma vistoria — é só um laboratório de teste.
-
-// Fixos como seriam numa vistoria de verdade — sem opção de escolha na tela
-const RESOLUCAO_VISTORIA = { width: 854, height: 480 } // 480p
-
-// Safari/iOS historicamente não respeita bem o videoBitsPerSecond pedido — em teste
-// real gravou ~40% acima do bitrate solicitado (700kbps reais pedindo 500kbps). Por
-// isso pedimos um alvo mais baixo lá, compensando esse excesso, pra manter o tamanho
-// final na mesma faixa do Android sem precisar mexer no gatilho de segurança.
-const BITRATE_VISTORIA_PADRAO = 500_000 // 500kbps
-const BITRATE_VISTORIA_IOS = 350_000 // 350kbps
-
-// Mesma margem de segurança do comprimir-video.ts, abaixo dos ~4.5MB da Vercel
-const TAMANHO_MAXIMO_BYTES = 4.3 * 1024 * 1024
-
-function calcularDuracaoMaxima(bitsPerSecond: number): number {
-  return Math.floor((TAMANHO_MAXIMO_BYTES * 8) / bitsPerSecond)
-}
-
-function isIOS(): boolean {
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent)
-}
-
-function escolherMimeType(): string {
-  const candidatos = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4']
-  for (const tipo of candidatos) {
-    if (MediaRecorder.isTypeSupported(tipo)) return tipo
-  }
-  return ''
-}
+// Não está ligada a nenhuma vistoria — é só um laboratório de teste. A config de
+// resolução/bitrate/margem é compartilhada com o componente GravadorVideo (as
+// vistorias de verdade) via src/lib/gravacao-video.ts.
 
 function fmtMB(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(2)
@@ -83,7 +64,7 @@ export default function TesteCameraPage() {
       setAutorizado(false)
     }
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
-    setBitrateVistoria(isIOS() ? BITRATE_VISTORIA_IOS : BITRATE_VISTORIA_PADRAO)
+    setBitrateVistoria(bitrateParaDispositivo())
   }, [])
 
   useEffect(() => {
@@ -214,7 +195,7 @@ export default function TesteCameraPage() {
     const duracaoMaxima = calcularDuracaoMaxima(bitrateVistoria)
     const videoTrack = streamRef.current.getVideoTracks()[0]
     try {
-      const mimeType = escolherMimeType()
+      const mimeType = escolherMimeTypeVideo()
       const recorder = new MediaRecorder(streamRef.current, {
         ...(mimeType ? { mimeType } : {}),
         videoBitsPerSecond: bitrateVistoria,
