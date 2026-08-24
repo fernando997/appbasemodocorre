@@ -207,7 +207,7 @@ export default function TesteCameraPage() {
       recorder.onerror = () => setErro('Erro ao gravar vídeo.')
 
       recorderRef.current = recorder
-      recorder.start(1000) // timeslice de 1s pra conseguir medir o tamanho real durante a gravação
+      recorder.start(250) // timeslice curto: reduz o tamanho do "último pedaço" que pode passar do gatilho de 4.3MB antes do stop() ser processado
       setGravando(true)
       setSegundos(0)
       segundosRef.current = 0
