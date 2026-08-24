@@ -24,6 +24,13 @@ const BITRATES = [
   { label: '2 Mbps', value: 2_000_000 },
 ] as const
 
+// Mesma margem de segurança do comprimir-video.ts, abaixo dos ~4.5MB da Vercel
+const TAMANHO_MAXIMO_BYTES = 4.3 * 1024 * 1024
+
+function calcularDuracaoMaxima(bitsPerSecond: number): number {
+  return Math.floor((TAMANHO_MAXIMO_BYTES * 8) / bitsPerSecond)
+}
+
 function escolherMimeType(): string {
   const candidatos = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4']
   for (const tipo of candidatos) {
@@ -55,6 +62,8 @@ export default function TesteCameraPage() {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tamanhoAcumuladoRef = useRef(0)
+  const segundosRef = useRef(0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const placaBoxRef = useRef<HTMLDivElement>(null)
   const placaUploadRef = useRef<HTMLInputElement>(null)
@@ -180,26 +189,49 @@ export default function TesteCameraPage() {
     if (resultado) { URL.revokeObjectURL(resultado.url); setResultado(null) }
 
     const mimeType = escolherMimeType()
+    const duracaoMaxima = calcularDuracaoMaxima(bitrate.value)
     try {
       const recorder = new MediaRecorder(streamRef.current, {
         ...(mimeType ? { mimeType } : {}),
         videoBitsPerSecond: bitrate.value,
       })
       chunksRef.current = []
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      tamanhoAcumuladoRef.current = 0
+      recorder.ondataavailable = (e) => {
+        if (e.data.size <= 0) return
+        chunksRef.current.push(e.data)
+        tamanhoAcumuladoRef.current += e.data.size
+        // Rede de segurança: o bitrate pedido é só uma sugestão pro encoder, que pode
+        // estourar (cena com movimento). Se o tamanho real já bateu o limite, para na
+        // hora, sem esperar o cronômetro acabar.
+        if (tamanhoAcumuladoRef.current >= TAMANHO_MAXIMO_BYTES && recorder.state === 'recording') {
+          recorder.stop()
+        }
+      }
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' })
         const url = URL.createObjectURL(blob)
-        setResultado({ url, tamanho: blob.size, duracao: segundos, mimeType: mimeType || 'video/webm' })
+        setResultado({ url, tamanho: blob.size, duracao: segundosRef.current, mimeType: mimeType || 'video/webm' })
+        setGravando(false)
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
       }
       recorder.onerror = () => setErro('Erro ao gravar vídeo.')
 
       recorderRef.current = recorder
-      recorder.start()
+      recorder.start(1000) // timeslice de 1s pra conseguir medir o tamanho real durante a gravação
       setGravando(true)
       setSegundos(0)
-      timerRef.current = setInterval(() => setSegundos((s) => s + 1), 1000)
+      segundosRef.current = 0
+      timerRef.current = setInterval(() => {
+        setSegundos((s) => {
+          const proximo = s + 1
+          segundosRef.current = proximo
+          if (proximo >= duracaoMaxima && recorderRef.current?.state === 'recording') {
+            recorderRef.current.stop()
+          }
+          return proximo
+        })
+      }, 1000)
     } catch (err) {
       setErro(`Erro ao iniciar gravação: ${String(err)}`)
     }
@@ -207,7 +239,6 @@ export default function TesteCameraPage() {
 
   function pararGravacao() {
     recorderRef.current?.stop()
-    setGravando(false)
   }
 
   if (autorizado === null) {
@@ -339,6 +370,10 @@ export default function TesteCameraPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800">
+                  Com esse bitrate, o limite de gravação é de <strong>{calcularDuracaoMaxima(bitrate.value)}s</strong> pra não passar de 4.3MB.
                 </div>
               </div>
             )}
@@ -527,7 +562,8 @@ export default function TesteCameraPage() {
           )}
           {gravando && (
             <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg">
-              <Circle className="w-2 h-2 fill-white animate-pulse" /> {segundos}s
+              <Circle className="w-2 h-2 fill-white animate-pulse" />
+              {Math.max(0, calcularDuracaoMaxima(bitrate.value) - segundos)}s restantes
             </div>
           )}
           {ajusteReal && (
