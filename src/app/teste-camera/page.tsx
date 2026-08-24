@@ -82,6 +82,19 @@ export default function TesteCameraPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // App indo pra segundo plano (troca de app, tela apagando) no meio da gravação
+  // deixa o stream num estado incerto — melhor parar e salvar o que já foi
+  // gravado do que arriscar travar com o gravador preso em 'recording'.
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.hidden && recorderRef.current?.state === 'recording') {
+        recorderRef.current.stop()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
+
   async function iniciarCamera() {
     setErro('')
     try {
@@ -199,10 +212,14 @@ export default function TesteCameraPage() {
       }
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' })
-        const url = URL.createObjectURL(blob)
-        setResultado({ url, tamanho: blob.size, duracao: segundosRef.current, mimeType: mimeType || 'video/webm' })
         setGravando(false)
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+        if (blob.size === 0) {
+          setErro('Vídeo muito curto, tente gravar por mais tempo.')
+          return
+        }
+        const url = URL.createObjectURL(blob)
+        setResultado({ url, tamanho: blob.size, duracao: segundosRef.current, mimeType: mimeType || 'video/webm' })
       }
       recorder.onerror = () => setErro('Erro ao gravar vídeo.')
 
@@ -227,7 +244,9 @@ export default function TesteCameraPage() {
   }
 
   function pararGravacao() {
-    recorderRef.current?.stop()
+    if (recorderRef.current?.state === 'recording') {
+      recorderRef.current.stop()
+    }
   }
 
   if (autorizado === null) {
