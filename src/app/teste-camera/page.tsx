@@ -13,13 +13,23 @@ import { Button } from '@/components/ui/button'
 
 // Fixos como seriam numa vistoria de verdade — sem opção de escolha na tela
 const RESOLUCAO_VISTORIA = { width: 854, height: 480 } // 480p
-const BITRATE_VISTORIA = 500_000 // 500kbps
+
+// Safari/iOS historicamente não respeita bem o videoBitsPerSecond pedido — em teste
+// real gravou ~40% acima do bitrate solicitado (700kbps reais pedindo 500kbps). Por
+// isso pedimos um alvo mais baixo lá, compensando esse excesso, pra manter o tamanho
+// final na mesma faixa do Android sem precisar mexer no gatilho de segurança.
+const BITRATE_VISTORIA_PADRAO = 500_000 // 500kbps
+const BITRATE_VISTORIA_IOS = 350_000 // 350kbps
 
 // Mesma margem de segurança do comprimir-video.ts, abaixo dos ~4.5MB da Vercel
 const TAMANHO_MAXIMO_BYTES = 4.3 * 1024 * 1024
 
 function calcularDuracaoMaxima(bitsPerSecond: number): number {
   return Math.floor((TAMANHO_MAXIMO_BYTES * 8) / bitsPerSecond)
+}
+
+function isIOS(): boolean {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent)
 }
 
 function escolherMimeType(): string {
@@ -57,6 +67,7 @@ export default function TesteCameraPage() {
   const placaBoxRef = useRef<HTMLDivElement>(null)
   const placaUploadRef = useRef<HTMLInputElement>(null)
   const [isMobile, setIsMobile] = useState(true)
+  const [bitrateVistoria, setBitrateVistoria] = useState(BITRATE_VISTORIA_PADRAO)
 
   // Tamanho fixo (em px) da janela-guia da placa — precisa bater com as
   // classes w-44/aspect-[8/7] usadas no JSX pra recortar certo na captura
@@ -72,6 +83,7 @@ export default function TesteCameraPage() {
       setAutorizado(false)
     }
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
+    setBitrateVistoria(isIOS() ? BITRATE_VISTORIA_IOS : BITRATE_VISTORIA_PADRAO)
   }, [])
 
   useEffect(() => {
@@ -185,17 +197,27 @@ export default function TesteCameraPage() {
     pararCamera()
   }
 
+  function pararTimer() {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+  }
+
   function iniciarGravacao() {
     if (!streamRef.current) return
     setErro('')
     if (resultado) { URL.revokeObjectURL(resultado.url); setResultado(null) }
 
-    const mimeType = escolherMimeType()
-    const duracaoMaxima = calcularDuracaoMaxima(BITRATE_VISTORIA)
+    if (typeof MediaRecorder === 'undefined') {
+      setErro('Este navegador não suporta gravação de vídeo (MediaRecorder indisponível).')
+      return
+    }
+
+    const duracaoMaxima = calcularDuracaoMaxima(bitrateVistoria)
+    const videoTrack = streamRef.current.getVideoTracks()[0]
     try {
+      const mimeType = escolherMimeType()
       const recorder = new MediaRecorder(streamRef.current, {
         ...(mimeType ? { mimeType } : {}),
-        videoBitsPerSecond: BITRATE_VISTORIA,
+        videoBitsPerSecond: bitrateVistoria,
       })
       chunksRef.current = []
       tamanhoAcumuladoRef.current = 0
@@ -211,9 +233,10 @@ export default function TesteCameraPage() {
         }
       }
       recorder.onstop = () => {
+        if (videoTrack) videoTrack.onended = null
         const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' })
         setGravando(false)
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+        pararTimer()
         if (blob.size === 0) {
           setErro('Vídeo muito curto, tente gravar por mais tempo.')
           return
@@ -221,7 +244,21 @@ export default function TesteCameraPage() {
         const url = URL.createObjectURL(blob)
         setResultado({ url, tamanho: blob.size, duracao: segundosRef.current, mimeType: mimeType || 'video/webm' })
       }
-      recorder.onerror = () => setErro('Erro ao gravar vídeo.')
+      recorder.onerror = () => {
+        setErro('Erro ao gravar vídeo.')
+        setGravando(false)
+        pararTimer()
+      }
+
+      // Câmera pode ser tomada pelo sistema no meio da gravação (ligação chegando,
+      // outro app pedindo a câmera, permissão revogada) — sem isso, a gravação fica
+      // num limbo até o cronômetro ou a rede de segurança por tamanho resolverem.
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          setErro('A câmera foi desconectada durante a gravação.')
+          if (recorder.state === 'recording') recorder.stop()
+        }
+      }
 
       recorderRef.current = recorder
       recorder.start(250) // timeslice curto: reduz o tamanho do "último pedaço" que pode passar do gatilho de 4.3MB antes do stop() ser processado
@@ -342,7 +379,7 @@ export default function TesteCameraPage() {
             {/* Fixo em 480p/500kbps, igual seria numa vistoria real — sem seleção */}
             {modo === 'video' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800">
-                Gravando em 480p / 500kbps. Limite de <strong>{calcularDuracaoMaxima(BITRATE_VISTORIA)}s</strong> pra não passar de 4.3MB.
+                Gravando em 480p / {Math.round(bitrateVistoria / 1000)}kbps. Limite de <strong>{calcularDuracaoMaxima(bitrateVistoria)}s</strong> pra não passar de 4.3MB.
               </div>
             )}
           </>
@@ -531,7 +568,7 @@ export default function TesteCameraPage() {
           {gravando && (
             <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg">
               <Circle className="w-2 h-2 fill-white animate-pulse" />
-              {Math.max(0, calcularDuracaoMaxima(BITRATE_VISTORIA) - segundos)}s restantes
+              {Math.max(0, calcularDuracaoMaxima(bitrateVistoria) - segundos)}s restantes
             </div>
           )}
           {ajusteReal && (
