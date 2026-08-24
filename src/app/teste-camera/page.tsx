@@ -11,18 +11,9 @@ import { Button } from '@/components/ui/button'
 // prototipo pra etapa de selfie da vistoria de entrega.
 // Não está ligada a nenhuma vistoria — é só um laboratório de teste.
 
-const RESOLUCOES = [
-  { label: '360p', width: 640, height: 360 },
-  { label: '480p', width: 854, height: 480 },
-  { label: '720p', width: 1280, height: 720 },
-] as const
-
-const BITRATES = [
-  { label: '250 kbps', value: 250_000 },
-  { label: '500 kbps', value: 500_000 },
-  { label: '1 Mbps', value: 1_000_000 },
-  { label: '2 Mbps', value: 2_000_000 },
-] as const
+// Fixos como seriam numa vistoria de verdade — sem opção de escolha na tela
+const RESOLUCAO_VISTORIA = { width: 854, height: 480 } // 480p
+const BITRATE_VISTORIA = 500_000 // 500kbps
 
 // Mesma margem de segurança do comprimir-video.ts, abaixo dos ~4.5MB da Vercel
 const TAMANHO_MAXIMO_BYTES = 4.3 * 1024 * 1024
@@ -45,8 +36,6 @@ function fmtMB(bytes: number): string {
 
 export default function TesteCameraPage() {
   const [modo, setModo] = useState<'video' | 'foto' | 'selfie' | 'placa'>('video')
-  const [resolucao, setResolucao] = useState<(typeof RESOLUCOES)[number]>(RESOLUCOES[0])
-  const [bitrate, setBitrate] = useState<(typeof BITRATES)[number]>(BITRATES[0])
   const [autorizado, setAutorizado] = useState<boolean | null>(null)
   const [cameraAtiva, setCameraAtiva] = useState(false)
   const [gravando, setGravando] = useState(false)
@@ -103,7 +92,7 @@ export default function TesteCameraPage() {
           ? { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } }
           : modo === 'placa'
             ? { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-            : { facingMode: 'environment', width: { ideal: resolucao.width }, height: { ideal: resolucao.height } },
+            : { facingMode: 'environment', width: { ideal: RESOLUCAO_VISTORIA.width }, height: { ideal: RESOLUCAO_VISTORIA.height } },
       })
       streamRef.current = stream
       if (previewRef.current) {
@@ -189,11 +178,11 @@ export default function TesteCameraPage() {
     if (resultado) { URL.revokeObjectURL(resultado.url); setResultado(null) }
 
     const mimeType = escolherMimeType()
-    const duracaoMaxima = calcularDuracaoMaxima(bitrate.value)
+    const duracaoMaxima = calcularDuracaoMaxima(BITRATE_VISTORIA)
     try {
       const recorder = new MediaRecorder(streamRef.current, {
         ...(mimeType ? { mimeType } : {}),
-        videoBitsPerSecond: bitrate.value,
+        videoBitsPerSecond: BITRATE_VISTORIA,
       })
       chunksRef.current = []
       tamanhoAcumuladoRef.current = 0
@@ -331,50 +320,10 @@ export default function TesteCameraPage() {
               {' '}Nada aqui é enviado pra lugar nenhum.
             </div>
 
-            {/* Configurações — só fazem sentido pro modo vídeo */}
+            {/* Fixo em 480p/500kbps, igual seria numa vistoria real — sem seleção */}
             {modo === 'video' && (
-              <div className="bg-white border rounded-xl p-4 space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Resolução pedida</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {RESOLUCOES.map((r) => (
-                      <button
-                        key={r.label}
-                        onClick={() => setResolucao(r)}
-                        className={`py-2.5 rounded-lg text-sm font-semibold border-2 transition-all ${
-                          resolucao.label === r.label
-                            ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md scale-[1.03]'
-                            : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
-                        }`}
-                      >
-                        {r.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Bitrate</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {BITRATES.map((b) => (
-                      <button
-                        key={b.label}
-                        onClick={() => setBitrate(b)}
-                        className={`py-2.5 rounded-lg text-xs font-semibold border-2 transition-all ${
-                          bitrate.label === b.label
-                            ? 'bg-[#1B2043] text-white border-[#1B2043] shadow-md scale-[1.03]'
-                            : 'bg-background text-muted-foreground border-input hover:border-[#1B2043]/40'
-                        }`}
-                      >
-                        {b.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800">
-                  Com esse bitrate, o limite de gravação é de <strong>{calcularDuracaoMaxima(bitrate.value)}s</strong> pra não passar de 4.3MB.
-                </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800">
+                Gravando em 480p / 500kbps. Limite de <strong>{calcularDuracaoMaxima(BITRATE_VISTORIA)}s</strong> pra não passar de 4.3MB.
               </div>
             )}
           </>
@@ -563,7 +512,7 @@ export default function TesteCameraPage() {
           {gravando && (
             <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg">
               <Circle className="w-2 h-2 fill-white animate-pulse" />
-              {Math.max(0, calcularDuracaoMaxima(bitrate.value) - segundos)}s restantes
+              {Math.max(0, calcularDuracaoMaxima(BITRATE_VISTORIA) - segundos)}s restantes
             </div>
           )}
           {ajusteReal && (
