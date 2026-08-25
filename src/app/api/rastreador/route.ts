@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
           principal: principalFresco ? { lat: data0.principal?.lat ?? null, long: data0.principal?.long ?? null } : { lat: null, long: null },
           backup: backupFresco ? { lat: data0.bck?.lat ?? null, long: data0.bck?.long ?? null } : { lat: null, long: null },
         }
-        if (Object.values(locs).some(temPosicao)) {
+        if (temPosicao(locs.principal) && temPosicao(locs.backup)) {
           const resultado: Resultado = { plataforma: 'GETRAK', localizacoes: locs }
           return NextResponse.json(resultado)
         }
@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
           backup: { lat: data.backup?.latitude ?? null, long: data.backup?.longitude ?? null },
           tag: { lat: data.tag?.latitude ?? null, long: data.tag?.longitude ?? null },
         }
-        // Tudo null = a moto não existe na ModoTrack → sem sinal
-        if (Object.values(locs).some(temPosicao)) {
+        // Exige principal e backup com posição (tag é informativo, não entra na checagem)
+        if (temPosicao(locs.principal) && temPosicao(locs.backup)) {
           const resultado: Resultado = { plataforma: 'MODOTRACK', localizacoes: locs }
           return NextResponse.json(resultado)
         }
