@@ -344,11 +344,11 @@ function VistoriaEntregaContent() {
         mudarEtapa(1)
       } else {
         setFacialStatus('reprovado')
-        setFacialErro(data.dados_extraidos?.motivo || 'A validacao facial nao foi aprovada.')
+        setFacialErro('Erro na validacao facial. Tente novamente.')
       }
     } catch (err) {
       console.error('[vistoria-entrega] Erro validacao facial:', err)
-      setFacialErro(err instanceof Error ? err.message : 'Erro ao validar reconhecimento facial. Tente novamente.')
+      setFacialErro('Erro na validacao facial. Tente novamente.')
     } finally {
       setValidandoFacial(false)
       setFacialStep(0)
