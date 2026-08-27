@@ -12,9 +12,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = new FormData()
-  body.append('selfie', selfie)
+  body.append('selfie', selfie, selfie.name || 'selfie.jpg')
   body.append('cnh_pdf', '')
-  body.append('cnh_imagem', cnhImagem)
+  body.append('cnh_imagem', cnhImagem, cnhImagem.name || 'cnh.jpg')
 
   const res = await fetch(FACIAL_API_URL, {
     method: 'POST',
