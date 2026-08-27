@@ -250,7 +250,7 @@ function VistoriaEntregaContent() {
     const video = previewSelfieRef.current
     const canvas = canvasSelfieRef.current
     if (!video || !canvas) return
-    if (!video.videoWidth || !video.videoHeight) {
+    if (video.videoWidth < 100 || video.videoHeight < 100) {
       setErroCameraSelfie('Camera ainda carregando, aguarde um instante e tente novamente.')
       return
     }
@@ -325,6 +325,9 @@ function VistoriaEntregaContent() {
       const selfieRes = await fetch(selfie)
       const selfieBlob = await selfieRes.blob()
       const cnhRes = await fetch(fotoCnhUrl)
+      if (!cnhRes.ok || !cnhRes.headers.get('content-type')?.startsWith('image/')) {
+        throw new Error('Nao foi possivel carregar a foto da CNH cadastrada.')
+      }
       const cnhBlob = await cnhRes.blob()
       setFacialStep(2)
       const form = new FormData()
@@ -345,7 +348,7 @@ function VistoriaEntregaContent() {
       }
     } catch (err) {
       console.error('[vistoria-entrega] Erro validacao facial:', err)
-      setFacialErro('Erro ao validar reconhecimento facial. Tente novamente.')
+      setFacialErro(err instanceof Error ? err.message : 'Erro ao validar reconhecimento facial. Tente novamente.')
     } finally {
       setValidandoFacial(false)
       setFacialStep(0)

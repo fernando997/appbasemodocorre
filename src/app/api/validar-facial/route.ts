@@ -11,10 +11,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'selfie e cnh_imagem são obrigatórios' }, { status: 400 })
   }
 
+  const selfieJpeg = new Blob([await selfie.arrayBuffer()], { type: 'image/jpeg' })
+  const cnhJpeg = new Blob([await cnhImagem.arrayBuffer()], { type: 'image/jpeg' })
+
   const body = new FormData()
-  body.append('selfie', selfie, selfie.name || 'selfie.jpg')
+  body.append('selfie', selfieJpeg, selfie.name || 'selfie.jpg')
   body.append('cnh_pdf', '')
-  body.append('cnh_imagem', cnhImagem, cnhImagem.name || 'cnh.jpg')
+  body.append('cnh_imagem', cnhJpeg, cnhImagem.name || 'cnh.jpg')
 
   const res = await fetch(FACIAL_API_URL, {
     method: 'POST',
