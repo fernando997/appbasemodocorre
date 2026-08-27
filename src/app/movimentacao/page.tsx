@@ -436,7 +436,7 @@ export default function MovimentacaoPage() {
   const [fotoNovaSub, setFotoNovaSub] = useState<string | null>(null)
   const [analisandoNovaSub, setAnalisandoNovaSub] = useState(false)
   const [testandoRastreador, setTestandoRastreador] = useState(false)
-  const [rastreadorInfo, setRastreadorInfo] = useState<{ plataforma: string | null; localizacoes: Record<string, { lat: number | null; long: number | null }> } | null>(null)
+  const [rastreadorInfo, setRastreadorInfo] = useState<{ ok: boolean; localizacoes: Record<string, { lat: number | null; long: number | null; plataforma: string | null }> } | null>(null)
   const [enderecosRastreador, setEnderecosRastreador] = useState<Record<string, string>>({})
   const [linkVistoriaSub, setLinkVistoriaSub] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
@@ -719,7 +719,7 @@ export default function MovimentacaoPage() {
           .catch(() => {})
       })
     } catch {
-      setRastreadorInfo({ plataforma: null, localizacoes: {} })
+      setRastreadorInfo({ ok: false, localizacoes: {} })
     } finally {
       setTestandoRastreador(false)
     }
@@ -1712,7 +1712,7 @@ export default function MovimentacaoPage() {
               </div>
             )}
 
-            {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
+            {!testandoRastreador && rastreadorInfo && rastreadorInfo.ok && (
               <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
                 <div className="bg-gradient-to-r from-green-50 to-white px-4 sm:px-5 py-4 flex flex-wrap items-center gap-3 border-b">
                   <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
@@ -1720,7 +1720,7 @@ export default function MovimentacaoPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-green-800">Rastreador ativo</p>
-                    <p className="text-xs text-muted-foreground truncate">Moto {placa} · {rastreadorInfo.plataforma}</p>
+                    <p className="text-xs text-muted-foreground truncate">Moto {placa}</p>
                   </div>
                   <Button
                     variant="outline"
@@ -1743,7 +1743,10 @@ export default function MovimentacaoPage() {
                           <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium capitalize">{nome}</p>
+                          <p className="text-sm font-medium capitalize">
+                            {nome}
+                            {loc.plataforma && <span className="text-xs font-normal text-muted-foreground"> · {loc.plataforma}</span>}
+                          </p>
                           {temSinal ? (
                             <p className="text-xs text-muted-foreground truncate">
                               {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
@@ -1771,7 +1774,7 @@ export default function MovimentacaoPage() {
               </div>
             )}
 
-            {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
+            {!testandoRastreador && rastreadorInfo && !rastreadorInfo.ok && (
               <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
                   <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
@@ -1991,7 +1994,7 @@ export default function MovimentacaoPage() {
                 </div>
               )}
 
-              {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
+              {!testandoRastreador && rastreadorInfo && rastreadorInfo.ok && (
                 <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
                   <div className="bg-gradient-to-r from-green-50 to-white px-4 sm:px-5 py-4 flex flex-wrap items-center gap-3 border-b">
                     <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
@@ -1999,7 +2002,7 @@ export default function MovimentacaoPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-green-800">Rastreador ativo</p>
-                      <p className="text-xs text-muted-foreground truncate">Moto {placa} · {rastreadorInfo.plataforma}</p>
+                      <p className="text-xs text-muted-foreground truncate">Moto {placa}</p>
                     </div>
                     <Button
                       variant="outline"
@@ -2050,7 +2053,7 @@ export default function MovimentacaoPage() {
                 </div>
               )}
 
-              {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
+              {!testandoRastreador && rastreadorInfo && !rastreadorInfo.ok && (
                 <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
                   <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
                     <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
@@ -2073,7 +2076,7 @@ export default function MovimentacaoPage() {
                 <>
                   <Button
                     className="w-full gap-2 bg-blue-600 hover:bg-blue-700 h-12 text-base"
-                    disabled={!kmDisponibilidade.trim() || !combustivelDisponibilidade || !videoDisponibilidadeFile || (veiculoFuncoes?.km != null && Number(kmDisponibilidade) < Number(veiculoFuncoes.km)) || testandoRastreador || !rastreadorInfo?.plataforma || pendenciasAtivas.length > 0}
+                    disabled={!kmDisponibilidade.trim() || !combustivelDisponibilidade || !videoDisponibilidadeFile || (veiculoFuncoes?.km != null && Number(kmDisponibilidade) < Number(veiculoFuncoes.km)) || testandoRastreador || !rastreadorInfo?.ok || pendenciasAtivas.length > 0}
                     onClick={enviarVistoriaDisponibilidade}
                   >
                     <CheckCircle2 className="w-5 h-5" />
@@ -2890,7 +2893,7 @@ export default function MovimentacaoPage() {
                 </div>
               )}
 
-              {!testandoRastreador && rastreadorInfo && rastreadorInfo.plataforma && (
+              {!testandoRastreador && rastreadorInfo && rastreadorInfo.ok && (
                 <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
                   <div className="bg-gradient-to-r from-green-50 to-white px-4 sm:px-5 py-4 flex flex-wrap items-center gap-3 border-b">
                     <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0">
@@ -2898,7 +2901,7 @@ export default function MovimentacaoPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-green-800">Rastreador ativo</p>
-                      <p className="text-xs text-muted-foreground truncate">Moto {placaNovaSub} · {rastreadorInfo.plataforma}</p>
+                      <p className="text-xs text-muted-foreground truncate">Moto {placaNovaSub}</p>
                     </div>
                     <Button
                       variant="outline"
@@ -2949,7 +2952,7 @@ export default function MovimentacaoPage() {
                 </div>
               )}
 
-              {!testandoRastreador && rastreadorInfo && !rastreadorInfo.plataforma && (
+              {!testandoRastreador && rastreadorInfo && !rastreadorInfo.ok && (
                 <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
                   <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
                     <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
@@ -2976,7 +2979,7 @@ export default function MovimentacaoPage() {
 
               <Button
                 className="w-full gap-2 bg-purple-600 hover:bg-purple-700 h-12"
-                disabled={!placaNovaSub.trim() || analisandoNovaSub || carregandoNovoSub || testandoRastreador || !motoNovaElegivel || !rastreadorInfo?.plataforma}
+                disabled={!placaNovaSub.trim() || analisandoNovaSub || carregandoNovoSub || testandoRastreador || !motoNovaElegivel || !rastreadorInfo?.ok}
                 onClick={() => {
                   const contratoObj = veiculoFuncoes?.contrato as { _id?: string; 'Numero ctr'?: number } | undefined
                   const numeroContrato = contratoObj?.['Numero ctr'] ?? ''

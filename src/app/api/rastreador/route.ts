@@ -3,12 +3,14 @@ import { RASTREADOR_SUPABASE_URL, RASTREADOR_SUPABASE_KEY, RASTREADOR_SUPABASE_A
 
 const MODOTRACK_URL = 'https://app.modotrack.com.br/api/v1/fleet/position-snapshot'
 
-type Loc = { lat: number | null; long: number | null }
+type Plataforma = 'GETRAK' | 'MODOTRACK'
+type Loc = { lat: number | null; long: number | null; plataforma: Plataforma | null }
 type Resultado = {
-  plataforma: 'GETRAK' | 'MODOTRACK' | null
+  ok: boolean
   localizacoes: Record<string, Loc>
 }
 
+const SEM_SINAL: Loc = { lat: null, long: null, plataforma: null }
 const IDADE_MAXIMA_MS = 8 * 60 * 60 * 1000 // 8h
 
 function temPosicao(loc: Loc | undefined | null): boolean {
@@ -22,71 +24,84 @@ function estaFresca(dataAt: string | null | undefined): boolean {
   return !Number.isNaN(ts) && Date.now() - ts <= IDADE_MAXIMA_MS
 }
 
+// Consulta GETRAK (api_posicao_por_placa) — retorna principal/backup só se a posição estiver fresca (≤8h)
+async function buscarGetrak(placaFmt: string): Promise<{ principal: Loc; backup: Loc }> {
+  try {
+    const bodyGetrak = JSON.stringify({ api_key: RASTREADOR_SUPABASE_KEY, p_placa: placaFmt })
+    const res = await fetch(RASTREADOR_SUPABASE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: RASTREADOR_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${RASTREADOR_SUPABASE_ANON_KEY}`,
+      },
+      body: bodyGetrak,
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data?.success) return { principal: SEM_SINAL, backup: SEM_SINAL }
+
+    const principalFresco = estaFresca(data.principal?.data_at)
+    const backupFresco = estaFresca(data.bck?.data_at)
+    return {
+      principal: principalFresco && data.principal?.lat != null && data.principal?.long != null
+        ? { lat: data.principal.lat, long: data.principal.long, plataforma: 'GETRAK' }
+        : SEM_SINAL,
+      backup: backupFresco && data.bck?.lat != null && data.bck?.long != null
+        ? { lat: data.bck.lat, long: data.bck.long, plataforma: 'GETRAK' }
+        : SEM_SINAL,
+    }
+  } catch {
+    return { principal: SEM_SINAL, backup: SEM_SINAL }
+  }
+}
+
+// Consulta ModoTrack — retorna principal/backup/tag (tag é só informativo)
+async function buscarModotrack(placaFmt: string): Promise<{ principal: Loc; backup: Loc; tag: Loc }> {
+  try {
+    const res = await fetch(`${MODOTRACK_URL}/${placaFmt}`, {
+      headers: {
+        accept: 'application/json',
+        'X-API-Key': process.env.MODOTRACK_KEY!,
+      },
+    })
+    if (!res.ok) return { principal: SEM_SINAL, backup: SEM_SINAL, tag: SEM_SINAL }
+    const data = await res.json()
+    return {
+      principal: data.principal?.latitude != null && data.principal?.longitude != null
+        ? { lat: data.principal.latitude, long: data.principal.longitude, plataforma: 'MODOTRACK' }
+        : SEM_SINAL,
+      backup: data.backup?.latitude != null && data.backup?.longitude != null
+        ? { lat: data.backup.latitude, long: data.backup.longitude, plataforma: 'MODOTRACK' }
+        : SEM_SINAL,
+      tag: data.tag?.latitude != null && data.tag?.longitude != null
+        ? { lat: data.tag.latitude, long: data.tag.longitude, plataforma: 'MODOTRACK' }
+        : SEM_SINAL,
+    }
+  } catch {
+    return { principal: SEM_SINAL, backup: SEM_SINAL, tag: SEM_SINAL }
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { placa } = await req.json()
     if (!placa) return NextResponse.json({ error: 'placa não enviada' }, { status: 400 })
     const placaFmt = String(placa).trim().toUpperCase()
 
-    // 1ª plataforma: GETRAK (api_posicao_por_placa)
-    try {
-      const bodyGetrak = JSON.stringify({ api_key: RASTREADOR_SUPABASE_KEY, p_placa: placaFmt })
-      console.log(`curl -X POST '${RASTREADOR_SUPABASE_URL}' -H 'Content-Type: application/json' -H 'apikey: ${RASTREADOR_SUPABASE_ANON_KEY}' -H 'Authorization: Bearer ${RASTREADOR_SUPABASE_ANON_KEY}' -d '${bodyGetrak}'`)
-      const res0 = await fetch(RASTREADOR_SUPABASE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: RASTREADOR_SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${RASTREADOR_SUPABASE_ANON_KEY}`,
-        },
-        body: bodyGetrak,
-      })
-      const data0 = await res0.json().catch(() => null)
+    // Consulta as duas plataformas sempre — a moto pode ter, por exemplo,
+    // o principal na GETRAK e o backup na MODOTRACK (ou vice-versa)
+    const [getrak, modotrack] = await Promise.all([buscarGetrak(placaFmt), buscarModotrack(placaFmt)])
 
-      if (res0.ok && data0?.success) {
-        // Só considera a posição se a atualização (data_at) tiver no máximo 8h — senão trata como sem sinal
-        const principalFresco = estaFresca(data0.principal?.data_at)
-        const backupFresco = estaFresca(data0.bck?.data_at)
-        const locs: Record<string, Loc> = {
-          principal: principalFresco ? { lat: data0.principal?.lat ?? null, long: data0.principal?.long ?? null } : { lat: null, long: null },
-          backup: backupFresco ? { lat: data0.bck?.lat ?? null, long: data0.bck?.long ?? null } : { lat: null, long: null },
-        }
-        if (temPosicao(locs.principal) && temPosicao(locs.backup)) {
-          const resultado: Resultado = { plataforma: 'GETRAK', localizacoes: locs }
-          return NextResponse.json(resultado)
-        }
-      }
-    } catch {
-      // GETRAK fora do ar → tenta a 2ª plataforma
+    const localizacoes: Record<string, Loc> = {
+      principal: temPosicao(getrak.principal) ? getrak.principal : modotrack.principal,
+      backup: temPosicao(getrak.backup) ? getrak.backup : modotrack.backup,
+      tag: modotrack.tag,
     }
 
-    // 2ª plataforma: ModoTrack
-    try {
-      const res = await fetch(`${MODOTRACK_URL}/${placaFmt}`, {
-        headers: {
-          accept: 'application/json',
-          'X-API-Key': process.env.MODOTRACK_KEY!,
-        },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const locs: Record<string, Loc> = {
-          principal: { lat: data.principal?.latitude ?? null, long: data.principal?.longitude ?? null },
-          backup: { lat: data.backup?.latitude ?? null, long: data.backup?.longitude ?? null },
-          tag: { lat: data.tag?.latitude ?? null, long: data.tag?.longitude ?? null },
-        }
-        // Exige principal e backup com posição (tag é informativo, não entra na checagem)
-        if (temPosicao(locs.principal) && temPosicao(locs.backup)) {
-          const resultado: Resultado = { plataforma: 'MODOTRACK', localizacoes: locs }
-          return NextResponse.json(resultado)
-        }
-      }
-    } catch {
-      // ModoTrack fora do ar
+    const resultado: Resultado = {
+      ok: temPosicao(localizacoes.principal) && temPosicao(localizacoes.backup),
+      localizacoes,
     }
-
-    // Nenhuma plataforma trouxe localização → bloqueia
-    const resultado: Resultado = { plataforma: null, localizacoes: {} }
     return NextResponse.json(resultado)
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
