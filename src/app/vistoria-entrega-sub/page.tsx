@@ -140,6 +140,7 @@ function VistoriaEntregaContent() {
   // (validação facial) — sem bloquear a página caso o contrato não esteja apto
   const [fotoCnhUrl, setFotoCnhUrl] = useState<string | null>(null)
   const [buscandoCnh, setBuscandoCnh] = useState(true)
+  const [pularVerificacaoFacial, setPularVerificacaoFacial] = useState(false)
 
   // Dados do veiculo
   const [veiculoKm, setVeiculoKm] = useState<number | null>(null)
@@ -195,6 +196,7 @@ function VistoriaEntregaContent() {
           const url = cliente.foto_cnh.startsWith('//') ? `https:${cliente.foto_cnh}` : cliente.foto_cnh
           setFotoCnhUrl(url)
         }
+        setPularVerificacaoFacial(String(data.response?.contrato?.['Verificação-facial']).toUpperCase() === 'FALSO')
       })
       .catch(() => {})
       .finally(() => setBuscandoCnh(false))
@@ -510,6 +512,10 @@ function VistoriaEntregaContent() {
 
   function handleAvancar() {
     if (etapa === 0) {
+      if (pularVerificacaoFacial) {
+        mudarEtapa(1)
+        return
+      }
       validarFacial()
       return
     }
