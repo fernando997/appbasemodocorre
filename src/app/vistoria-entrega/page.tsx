@@ -227,6 +227,10 @@ function VistoriaEntregaContent() {
     const video = previewSelfieRef.current
     const canvas = canvasSelfieRef.current
     if (!video || !canvas) return
+    if (!video.videoWidth || !video.videoHeight) {
+      setErroCameraSelfie('Camera ainda carregando, aguarde um instante e tente novamente.')
+      return
+    }
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
