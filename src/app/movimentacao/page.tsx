@@ -2025,7 +2025,10 @@ export default function MovimentacaoPage() {
                             <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium capitalize">{nome}</p>
+                            <p className="text-sm font-medium capitalize">
+                              {nome}
+                              {loc.plataforma && <span className="text-xs font-normal text-muted-foreground"> · {loc.plataforma}</span>}
+                            </p>
                             {temSinal ? (
                               <p className="text-xs text-muted-foreground truncate">
                                 {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
@@ -2924,7 +2927,10 @@ export default function MovimentacaoPage() {
                             <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium capitalize">{nome}</p>
+                            <p className="text-sm font-medium capitalize">
+                              {nome}
+                              {loc.plataforma && <span className="text-xs font-normal text-muted-foreground"> · {loc.plataforma}</span>}
+                            </p>
                             {temSinal ? (
                               <p className="text-xs text-muted-foreground truncate">
                                 {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
