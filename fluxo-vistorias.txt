@@ -1,0 +1,79 @@
+FLUXO DE VISTORIAS — Sistema Base Modo Corre
+(Levantado direto do código em 2026-08-12. estrutura.md está desatualizado, não usar como referência.)
+
+Tipos definidos em TIPOS_VISTORIA (src/app/movimentacao/page.tsx):
+DEVOLUÇÃO, ENTREGA, SUBSTITUIÇÃO, ORÇAMENTO, DISPONIBILIDADE, ENTRADA NA BASE, SAÍDA DA BASE, ENTREGA A TERCEIROS
+
+Só 4 têm fluxo implementado. Os outros 4 (ORÇAMENTO, ENTRADA NA BASE, SAÍDA DA BASE, ENTREGA A TERCEIROS)
+existem só como ícone/cor no array — sem bloco de renderização nem função de envio.
+
+──────────────────────────────
+1) DEVOLUÇÃO
+──────────────────────────────
+Feita pelo operador, na base (src/app/movimentacao/page.tsx, tipoSelecionado === 'DEVOLUÇÃO').
+7 etapas (state etapaDevolucao 0-6):
+  0. Fotos — 4 fotos obrigatórias (frente, lado direito/escapamento, traseira, lado esquerdo/pesinho)
+  1. Avarias — vídeo (comprimido no client)
+  2. Detalhes — vídeo (giro 360°, hodômetro etc.)
+  3. Rastreio — sim/não violação do rastreador; se sim, exige vídeo extra
+  4. Perguntas — manutenção estética, pneus, vazamento de óleo, moto ligando
+     (se ligando=sim, abre 5 sub-perguntas: fumaça, falhando, batendo válvula, cano adulterado, sem filtro de ar)
+  5. Revisão — resumo de fotos/respostas
+  6. KM/Enviar — KM final (valida >= KM atual) + observação
+
+Envio (enviarVistoriaDevolucao, linha ~669):
+  1. Gera PDF via gerarPdfVistoria (src/lib/gerar-pdf-vistoria.ts)
+  2. Upload do PDF + vídeos via /api/upload-foto
+  3. POST chamarBubble('vistoria_devolucao', body) — PLACA, KM, PDF, TIPO, VIDEO, VIDEO-2, CONTRATO,
+     respostas SIM/NÃO, VIOLACAO, NOME, USER (CPF)
+
+──────────────────────────────
+2) DISPONIBILIDADE
+──────────────────────────────
+Formulário único: KM, nível de combustível, vídeo 360°, teste automático de rastreador
+(bloqueia envio se pendência ativa ou rastreador sem sinal).
+Envio (enviarVistoriaDisponibilidade, linha ~880):
+  POST chamarBubble('base_vistoria_disponibilidade', { placa, km, nivel_comb, video, NOME, USER })
+
+──────────────────────────────
+3) SUBSTITUIÇÃO
+──────────────────────────────
+Duas pontas:
+  (a) Moto NOVA — operador na base: foto da placa → OCR (/api/ler-placa) → consulta veículo
+      (/wf/consulta-veiculo-funcoes) → checa elegibilidade (INCLUIR precisa status RESERVA;
+      RETIRAR precisa ser exatamente a moto esperada) → testa rastreador (/api/rastreador) →
+      gera link (/vistoria-entrega-sub ou /vistoria-entrega-retirada conforme modo) → envia por
+      WhatsApp (/api/enviar-vistoria-whatsapp, hoje com número fixo de teste — TODO trocar antes
+      de produção)
+  (b) Moto ANTIGA — reaproveita o mesmo fluxo de 7 etapas da Devolução (mesmo componente/state)
+      Envio (enviarVistoriaSubstituicao, linha ~756):
+        Gera PDF da moto antiga, upload, registrarVistoriaSubstituicao (endpoint varia por modo:
+        base-registro-vistoria-substituicao / base-registro-vistoria-retirar), depois
+        chamarBubble(endpointFinal, body) onde endpointFinal =
+          'base-vitoria-sub-retirar' (modo RETIRAR) ou 'base_vistoria_nova_sub' (modo INCLUIR)
+
+──────────────────────────────
+4) ENTREGA
+──────────────────────────────
+Não feita pelo operador. Gera link (/vistoria-entrega?placa=...&contrato=...) pra copiar e mandar
+pro cliente fazer sozinho.
+
+──────────────────────────────
+PÁGINAS CLIENT-FACING (fora do login interno, cliente faz pelo link)
+──────────────────────────────
+src/app/vistoria-entrega/page.tsx
+src/app/vistoria-entrega-sub/page.tsx
+src/app/vistoria-entrega-retirada/page.tsx
+
+Estrutura praticamente idêntica entre as 3 (8 etapas):
+  Selfie → Fotos → Avarias → Vídeo → KM → Local → Envio → Fim
+Selfie valida via /api/validar-facial. Fotos/vídeos via /api/upload-foto.
+
+Diferem só no endpoint final do Bubble:
+  vistoria-entrega        → base_vistoria_entrega-base
+  vistoria-entrega-sub    → base_vistoria_nova_sub (+ registro em base-registro-vistoria-substituicao)
+  vistoria-entrega-retirada → base-vitoria-sub-retirar (+ registro em base-registro-vistoria-retirar)
+
+──────────────────────────────
+Geração de PDF: src/lib/gerar-pdf-vistoria.ts
+Proxy Bubble (esconde apikey): POST /api/bubble → { endpoint, body, format }

@@ -317,7 +317,7 @@ export default function MovimentacaoPage() {
     }
   }
 
-  const STATUS_EXCLUIDOS = ['PENDENTE', 'COMPRA RECEBIDA', 'COMPRA EM TRÂNSITO', 'RETORNO DE LOCAÇÃO', 'LOCADO', 'DISPONIVEL']
+  const STATUS_EXCLUIDOS = ['PENDENTE', 'COMPRA RECEBIDA', 'COMPRA EM TRÂNSITO', 'RETORNO DE LOCAÇÃO', 'LOCADO', 'DISPONIVEL', 'ROUBADO/FURTADO']
 
   async function buscarStatusVeiculo() {
     setCarregandoStatus(true)

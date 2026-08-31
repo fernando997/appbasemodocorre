@@ -1,0 +1,23 @@
+curl --request POST \
+     --url https://api.helena.run/chat/v1/message/send \
+     --header 'Authorization: pn_5kHKeGDXwtOYTNwimDhlWwtyv1kruEkBdeU3oyL44' \
+     --header 'accept: application/json' \
+     --header 'content-type: application/*+json' \
+     --data '
+{
+  "from": "08000650101",
+  "body": {
+    "parameters": {
+      "CLIENTE": "New Value",
+      "LINK": "New Value"
+    },
+    "templateId": "88b8479c-9652-4373-ab91-afef0ffd4ccc"
+  },
+  "to": "TEL LOCATARIO",
+  "botId": "2292981a-b6be-4782-98ea-e0a205e53bfe",
+  "options": {
+    "enableBot": true,
+    "forceStartSession": true
+  }
+}
+'

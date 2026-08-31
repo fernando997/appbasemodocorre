@@ -135,3 +135,13 @@
 [data-slot="tabs-trigger"][data-active] {
   background: linear-gradient(to right, #1B2043, #6C63FF 25%, #6C63FF 75%, #1B2043) !important;
 }
+
+@keyframes moto-ride {
+  from { transform: translateX(-15%); }
+  to { transform: translateX(115%); }
+}
+
+@keyframes progress-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}

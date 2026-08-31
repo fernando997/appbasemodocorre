@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { Bike } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
 
@@ -14,6 +15,9 @@ async function chamarBubble(endpoint: string, body: Record<string, unknown>): Pr
   })
   return res.json()
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const INTERVALO_PAGINACAO_MS = 500
 
 const StatusFrota = dynamic(
   () => import('@/components/dashboard/status-frota').then((m) => m.StatusFrota),
@@ -30,6 +34,13 @@ const Pendencias = dynamic(
 
 const STATUS_ATENCAO = ['MANUTENÇÃO', 'SINISTRO', 'EM VISTORIA', 'IRREGULARES', 'BLOQUEADO', 'INATIVO']
 
+const FRASES_CARREGAMENTO = [
+  'Buscando motos na base...',
+  'Organizando a frota...',
+  'Consultando unidades ativas...',
+  'Quase lá...',
+]
+
 type Veiculo = {
   _id: string
   placa: string
@@ -43,6 +54,16 @@ export default function DashboardPage() {
   const [veiculos, setVeiculos] = useState<Veiculo[]>([])
   const [carregando, setCarregando] = useState(false)
   const [dadosRecolhas, setDadosRecolhas] = useState<unknown>(null)
+  const [totalCarregado, setTotalCarregado] = useState(0)
+  const [fraseIndex, setFraseIndex] = useState(0)
+
+  useEffect(() => {
+    if (!carregando) return
+    const id = setInterval(() => {
+      setFraseIndex((i) => (i + 1) % FRASES_CARREGAMENTO.length)
+    }, 2500)
+    return () => clearInterval(id)
+  }, [carregando])
 
   useEffect(() => {
     const cache = localStorage.getItem('mc_veiculos')
@@ -75,7 +96,9 @@ export default function DashboardPage() {
               todos.push(v)
             }
           }
+          setTotalCarregado(todos.length)
           minimo += TAMANHO
+          await sleep(INTERVALO_PAGINACAO_MS)
         }
 
         localStorage.setItem('mc_veiculos', JSON.stringify(todos))
@@ -126,6 +149,7 @@ export default function DashboardPage() {
 
           if (batchR.length === 0) break
           minimo += TAMANHO
+          await sleep(INTERVALO_PAGINACAO_MS)
         }
 
         setDadosRecolhas({ response: { recolha: todasRecolhas, pendencias: todasPendencias } })
@@ -140,11 +164,33 @@ export default function DashboardPage() {
 
   if (carregando && veiculos.length === 0) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#EEF0F8]">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-full border-4 border-[#1B2043]/20 border-t-[#6C63FF] animate-spin" />
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#EEF0F8] px-6">
+        <div className="w-full max-w-xs bg-white rounded-3xl shadow-[0_8px_40px_rgba(27,32,67,0.12)] p-8 flex flex-col items-center gap-7">
+
+          <div className="relative w-full h-10">
+            <div className="absolute bottom-0 left-0 right-0 border-t-2 border-dashed border-[#1B2043]/15" />
+            <Bike
+              className="absolute bottom-0 w-8 h-8 text-[#6C63FF]"
+              style={{ animation: 'moto-ride 1.8s ease-in-out infinite alternate' }}
+            />
+          </div>
+
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-3xl font-extrabold text-[#1B2043] tabular-nums leading-none">{totalCarregado}</p>
+            <p className="text-[11px] font-semibold text-[#1B2043]/40 uppercase tracking-wider">motos carregadas</p>
+          </div>
+
+          <div className="w-full h-1.5 rounded-full bg-[#1B2043]/10 overflow-hidden">
+            <div
+              className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#1B2043] to-[#6C63FF]"
+              style={{ animation: 'progress-indeterminate 1.4s ease-in-out infinite' }}
+            />
+          </div>
+
+          <p key={fraseIndex} className="text-sm font-medium text-[#1B2043]/60 text-center animate-in fade-in duration-500">
+            {FRASES_CARREGAMENTO[fraseIndex]}
+          </p>
         </div>
-        <p className="text-sm font-medium text-[#1B2043]/60">Carregando frota...</p>
       </div>
     )
   }
