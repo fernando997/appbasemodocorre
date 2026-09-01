@@ -594,6 +594,13 @@ export default function MovimentacaoPage() {
   const todasFotosDevOk = FOTOS_DEVOLUCAO.every(f => fotosDevolucaoFiles[f.id])
   const fotosDevCount = FOTOS_DEVOLUCAO.filter(f => fotosDevolucaoFiles[f.id]).length
 
+  // Vistoria já começou de fato (não apenas o tipo escolhido) — limpar a placa aqui
+  // descarta tudo, então o X pede confirmação
+  const vistoriaIniciada = !!tipoSelecionado && (
+    etapaDevolucao > 0 || subFase === 'antiga' || !!placaNovaSub ||
+    !!kmDisponibilidade || !!combustivelDisponibilidade || !!videoDisponibilidadeFile
+  )
+
   // INCLUIR: moto nova precisa estar RESERVA | RETIRAR: precisa ser exatamente a moto esperada (ignora status)
   const motoNovaElegivel = !!veiculoNovoSub && (modoSub === 'RETIRAR'
     ? String(veiculoNovoSub._id) === placaEsperadaId
@@ -1186,6 +1193,7 @@ export default function MovimentacaoPage() {
     setCombustivelDisponibilidade('')
     setVideoDisponibilidadeFile(null)
     resetDevolucao()
+    resetSubNova()
     if (inputRef.current) inputRef.current.value = ''
     pararCameraPlaca()
     setErroPlacaCamera('')
@@ -1349,7 +1357,10 @@ export default function MovimentacaoPage() {
           <div className="relative rounded-xl overflow-hidden h-40">
             <img src={foto} alt="Placa" className="w-full h-full object-contain rounded-xl bg-black" />
             <button
-              onClick={limpar}
+              onClick={() => {
+                if (vistoriaIniciada && !window.confirm('Há uma vistoria em andamento. Limpar a placa vai descartar tudo o que já foi feito. Deseja continuar?')) return
+                limpar()
+              }}
               className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1.5 hover:bg-black/80"
             >
               <X className="w-4 h-4" />
@@ -2990,8 +3001,33 @@ export default function MovimentacaoPage() {
                   const contratoObj = veiculoFuncoes?.contrato as { _id?: string; 'Numero ctr'?: number } | undefined
                   const numeroContrato = contratoObj?.['Numero ctr'] ?? ''
                   const contratoId = contratoObj?._id ?? ''
+                  const placaNova = placaNovaSub.trim().toUpperCase()
+                  const placaAntiga = placa.trim().toUpperCase()
+
+                  // Travas: um link com placa repetida ou contrato vazio grava a vistoria
+                  // no lado errado (ou nem abre), então bloqueia antes de gerar
+                  if (!placaNova || !placaAntiga) {
+                    setErro('Não foi possível gerar o link: placa da moto nova ou da moto antiga não identificada.')
+                    return
+                  }
+                  if (placaNova === placaAntiga) {
+                    setErro(`A moto nova (${placaNova}) é a mesma do contrato. Fotografe a moto correta.`)
+                    return
+                  }
+                  if (!numeroContrato || !contratoId) {
+                    setErro('Não foi possível gerar o link: contrato não identificado para esta placa.')
+                    return
+                  }
+
                   const rota = modoSub === 'RETIRAR' ? 'vistoria-entrega-retirada' : 'vistoria-entrega-sub'
-                  const link = `${window.location.origin}/${rota}?placa=${placaNovaSub.trim().toUpperCase()}&contrato=${numeroContrato}&placaContrato=${placa.trim().toUpperCase()}&contratoId=${contratoId}`
+                  const params = new URLSearchParams({
+                    placa: placaNova,
+                    contrato: String(numeroContrato),
+                    placaContrato: placaAntiga,
+                    contratoId: String(contratoId),
+                  })
+                  const link = `${window.location.origin}/${rota}?${params.toString()}`
+                  setErro(null)
                   setLinkVistoriaSub(link)
                   setSubFase('antiga')
                   // TODO: número fixo para teste — trocar para clienteInfo.celular antes de ir pra produção
