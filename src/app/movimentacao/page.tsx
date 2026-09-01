@@ -440,6 +440,9 @@ export default function MovimentacaoPage() {
   const [enderecosRastreador, setEnderecosRastreador] = useState<Record<string, string>>({})
   const [linkVistoriaSub, setLinkVistoriaSub] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
+  // Guarda a resposta do registro de substituição já gravado — se o envio final
+  // falhar e o operador tentar de novo, não registra a mesma vistoria duas vezes
+  const registroSubRef = useRef<string | null>(null)
   const [linkVistoriaEntrega, setLinkVistoriaEntrega] = useState('')
   const [linkEntregaCopiado, setLinkEntregaCopiado] = useState(false)
   const [contratoAptoEntrega, setContratoAptoEntrega] = useState(false)
@@ -627,6 +630,7 @@ export default function MovimentacaoPage() {
   }
 
   function resetSubNova() {
+    registroSubRef.current = null
     setSubFase('placa')
     setModoSub(null)
     setPlacaEsperadaId('')
@@ -868,6 +872,7 @@ export default function MovimentacaoPage() {
 
   async function enviarVistoriaSubstituicao() {
     if (!placa || !kmDevolucao || !placaNovaSub) return
+    if (enviandoVistoria) return
     setEnviandoVistoria(true)
     setErro(null)
     setEtapaEnvio('upload')
@@ -924,8 +929,12 @@ export default function MovimentacaoPage() {
       // Verifica se o cliente já terminou a vistoria da moto nova (ou se esta
       // é a primeira ponta a terminar) — o Bubble decide o tratamento
       const modo = modoSub ?? 'INCLUIR'
-      const registro = await registrarVistoriaSubstituicao(contratoId, placaNovaSub.trim().toUpperCase(), placa.trim().toUpperCase(), modo)
-      const registroTexto = extrairMensagemRegistro(registro)
+      let registroTexto = registroSubRef.current
+      if (registroTexto == null) {
+        const registro = await registrarVistoriaSubstituicao(contratoId, placaNovaSub.trim().toUpperCase(), placa.trim().toUpperCase(), modo)
+        registroTexto = extrairMensagemRegistro(registro)
+        registroSubRef.current = registroTexto
+      }
 
       setEtapaEnvio('vistoria')
 
@@ -1333,7 +1342,8 @@ export default function MovimentacaoPage() {
             <div className="space-y-2">
               <button
                 onClick={iniciarCameraPlaca}
-                className="w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                disabled={vistoriaIniciada}
+                className="w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-xl flex flex-col items-center justify-center gap-3 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-muted-foreground/30 disabled:hover:text-muted-foreground"
               >
                 <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
                   <Camera className="w-8 h-8" />
@@ -1344,7 +1354,7 @@ export default function MovimentacaoPage() {
                 </div>
               </button>
               {!isMobile && (
-                <Button variant="outline" onClick={() => inputRef.current?.click()} className="w-full">
+                <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={vistoriaIniciada} className="w-full">
                   <Upload className="w-4 h-4 mr-2" /> Enviar foto
                 </Button>
               )}
@@ -1384,17 +1394,17 @@ export default function MovimentacaoPage() {
             <input
               value={placa}
               onChange={(e) => setPlaca(e.target.value.toUpperCase())}
-              onKeyDown={(e) => { if (e.key === 'Enter' && placa.trim()) consultarFuncoes(placa) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && placa.trim() && !vistoriaIniciada) consultarFuncoes(placa) }}
               placeholder={analisando ? 'Analisando...' : 'Ex: ABC1D23'}
-              disabled={analisando}
-              className="flex-1 px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-blue-600/30 font-mono uppercase"
+              disabled={analisando || vistoriaIniciada}
+              className="flex-1 px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-blue-600/30 font-mono uppercase disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <Button
               variant="outline"
               size="icon"
               onClick={() => placa.trim() && consultarFuncoes(placa)}
-              disabled={analisando || carregandoFuncoes || !placa.trim()}
-              title="Buscar placa"
+              disabled={analisando || carregandoFuncoes || !placa.trim() || vistoriaIniciada}
+              title={vistoriaIniciada ? 'Vistoria em andamento — finalize ou cancele antes de trocar a placa' : 'Buscar placa'}
             >
               <Search className="w-4 h-4" />
             </Button>
@@ -1403,13 +1413,18 @@ export default function MovimentacaoPage() {
                 variant="outline"
                 size="icon"
                 onClick={() => base64 && analisarPlaca(base64)}
-                disabled={analisando || !base64}
-                title="Reanalisar foto"
+                disabled={analisando || !base64 || vistoriaIniciada}
+                title={vistoriaIniciada ? 'Vistoria em andamento — finalize ou cancele antes de trocar a placa' : 'Reanalisar foto'}
               >
                 <RotateCcw className="w-4 h-4" />
               </Button>
             )}
           </div>
+          {vistoriaIniciada && (
+            <p className="text-xs text-amber-600">
+              Placa travada: há uma vistoria em andamento. Finalize ou cancele antes de trocar de moto.
+            </p>
+          )}
         </div>
 
         {/* Card dados veículo */}
