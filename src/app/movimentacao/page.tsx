@@ -41,6 +41,17 @@ const ALIASES_TIPO_VISTORIA: Record<string, string[]> = {
   'SUBSTITUIÇÃO': ['SUBSTITUIÇÃO', 'SUBISTITUIÇÃO'],
 }
 
+// Data de um registro do Bubble — 'Created Date' pode vir como timestamp numérico
+// ou como texto ISO; Number() sozinho vira NaN no segundo caso e o sort não ordena
+function tsRegistro(registro: Record<string, unknown>): number {
+  const bruto = registro['Created Date'] ?? registro.data
+  if (bruto == null) return 0
+  const numero = Number(bruto)
+  if (Number.isFinite(numero)) return numero
+  const parsed = Date.parse(String(bruto))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 const NIVEIS_COMBUSTIVEL = ['R', '1/4', '1/2', '3/4', '4/4']
 
 const INSTRUCOES_VIDEO = [
@@ -609,10 +620,16 @@ export default function MovimentacaoPage() {
     ? String(veiculoNovoSub._id) === placaEsperadaId
     : (veiculoNovoSub.status_veiculo_desc as string) === 'RESERVA')
 
-  // Registro pendente de retirada (definindo se o card de Substituição deve indicar RETIRAR)
-  const pendenteRetirarCard = [...vistoriasRetirar].sort(
-    (a, b) => Number(b['Created Date'] ?? b.data ?? 0) - Number(a['Created Date'] ?? a.data ?? 0)
+  // Registro pendente de retirada (definindo se o card de Substituição deve indicar RETIRAR).
+  // Vale só a vistoria MAIS RECENTE: se ela estiver APROVADO a retirada já foi concluída
+  // e o card volta a ser INCLUIR, mesmo que existam registros antigos em aberto.
+  const retirarMaisRecente = [...vistoriasRetirar].sort(
+    (a, b) => tsRegistro(b) - tsRegistro(a)
   )[0]
+  const pendenteRetirarCard =
+    retirarMaisRecente && String(retirarMaisRecente.status ?? '').trim().toUpperCase() !== 'APROVADO'
+      ? retirarMaisRecente
+      : undefined
 
   function resetDevolucao() {
     setEtapaDevolucao(0)
