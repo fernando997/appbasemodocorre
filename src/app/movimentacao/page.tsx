@@ -621,14 +621,23 @@ export default function MovimentacaoPage() {
     : (veiculoNovoSub.status_veiculo_desc as string) === 'RESERVA')
 
   // Registro pendente de retirada (definindo se o card de Substituição deve indicar RETIRAR).
-  // Vale só a vistoria MAIS RECENTE: se ela estiver APROVADO a retirada já foi concluída
-  // e o card volta a ser INCLUIR, mesmo que existam registros antigos em aberto.
-  const retirarMaisRecente = [...vistoriasRetirar].sort(
-    (a, b) => tsRegistro(b) - tsRegistro(a)
-  )[0]
+  // 'vistorias-incluir' e 'vistorias-retirar' têm o mesmo formato — só o TXT que muda —
+  // então olha a vistoria MAIS RECENTE entre as duas listas:
+  //   última for INCLUIR aprovada    → RETIRAR (acabou de incluir, falta retirar a antiga)
+  //   última for RETIRAR não aprovada → RETIRAR (retirada ainda pendente)
+  //   qualquer outro caso              → INCLUIR
+  const registrosSub: (Record<string, unknown> & { __origem: 'INCLUIR' | 'RETIRAR' })[] = [
+    ...vistoriasIncluir.map(r => ({ ...r, __origem: 'INCLUIR' as const })),
+    ...vistoriasRetirar.map(r => ({ ...r, __origem: 'RETIRAR' as const })),
+  ]
+  const registroSubMaisRecente = [...registrosSub].sort((a, b) => tsRegistro(b) - tsRegistro(a))[0]
+  const statusAprovado = String(registroSubMaisRecente?.status ?? '').trim().toUpperCase() === 'APROVADO'
   const pendenteRetirarCard =
-    retirarMaisRecente && String(retirarMaisRecente.status ?? '').trim().toUpperCase() !== 'APROVADO'
-      ? retirarMaisRecente
+    registroSubMaisRecente && (
+      (registroSubMaisRecente.__origem === 'INCLUIR' && statusAprovado) ||
+      (registroSubMaisRecente.__origem === 'RETIRAR' && !statusAprovado)
+    )
+      ? registroSubMaisRecente
       : undefined
 
   function resetDevolucao() {

@@ -4,15 +4,24 @@ import { BUBBLE_BASE, BUBBLE_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
 // Proxy server-side para o Bubble — esconde o BUBBLE_PRIVATE_KEY (e a apikey)
 // do navegador. O client manda { endpoint, body, format } e essa rota monta
 // a chamada real, injetando apikey e o Authorization: Bearer aqui dentro.
+// Monta a URL da versão de desenvolvimento do Bubble (version-test) — usada
+// enquanto um workflow novo ainda não foi promovido pra live
+function bubbleUrl(endpoint: string, versionTest?: boolean): string {
+  if (!versionTest) return `${BUBBLE_BASE}/${endpoint}`
+  const base = new URL(BUBBLE_BASE)
+  base.pathname = `/version-test${base.pathname}`
+  return `${base.toString().replace(/\/$/, '')}/${endpoint}`
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { endpoint, body, format } = await req.json()
+    const { endpoint, body, format, versionTest } = await req.json()
     if (!endpoint || typeof endpoint !== 'string') {
       return NextResponse.json({ erro: 'endpoint obrigatório' }, { status: 400 })
     }
 
     const bodyComApikey = { apikey: BUBBLE_KEY, ...(body ?? {}) }
-    const url = `${BUBBLE_BASE}/${endpoint}`
+    const url = bubbleUrl(endpoint, versionTest)
     let res: Response
 
     if (format === 'json') {
