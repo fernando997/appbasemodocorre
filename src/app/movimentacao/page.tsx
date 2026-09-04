@@ -621,29 +621,19 @@ export default function MovimentacaoPage() {
     : (veiculoNovoSub.status_veiculo_desc as string) === 'RESERVA')
 
   // Registro pendente de retirada (definindo se o card de Substituição deve indicar RETIRAR).
-  // 'vistorias-incluir' e 'vistorias-retirar' têm o mesmo formato — só o TXT que muda — e
-  // trazem registros de OUTRAS motos também, então primeiro filtra só os que envolvem a moto
-  // consultada agora (placa1 = moto antiga, placa2 = moto nova), depois pega o MAIS RECENTE:
-  //   última for INCLUIR aprovada     → RETIRAR (essa moto entrou, falta retirar a antiga)
-  //   última for RETIRAR não aprovada → RETIRAR (retirada ainda pendente)
-  //   qualquer outro caso              → INCLUIR
+  // O Bubble já entrega isso pronto: um registro só aparece em 'vistorias-retirar' quando
+  // a retirada dessa moto ainda está pendente — o 'status' nele é do INCLUIR (aprovado ou
+  // não), não indica se a retirada em si já foi feita, então não filtra por status aqui.
+  // 'vistorias-retirar' também traz registros de OUTRAS motos, então filtra só os que
+  // envolvem a moto consultada agora (placa1 = moto antiga, placa2 = moto nova) e pega o
+  // mais recente entre eles.
   const veiculoFuncoesId = String((veiculoFuncoes as { _id?: string } | null)?._id ?? '')
-  const registrosSubTodos: (Record<string, unknown> & { __origem: 'INCLUIR' | 'RETIRAR' })[] = [
-    ...vistoriasIncluir.map(r => ({ ...r, __origem: 'INCLUIR' as const })),
-    ...vistoriasRetirar.map(r => ({ ...r, __origem: 'RETIRAR' as const })),
-  ]
-  const registrosSub = registrosSubTodos.filter(r =>
+  const registrosRetirarDaMoto = vistoriasRetirar.filter(r =>
     !!veiculoFuncoesId && (String(r.placa1 ?? '') === veiculoFuncoesId || String(r.placa2 ?? '') === veiculoFuncoesId)
   )
-  const registroSubMaisRecente = [...registrosSub].sort((a, b) => tsRegistro(b) - tsRegistro(a))[0]
-  const statusAprovado = String(registroSubMaisRecente?.status ?? '').trim().toUpperCase() === 'APROVADO'
-  const pendenteRetirarCard =
-    registroSubMaisRecente && (
-      (registroSubMaisRecente.__origem === 'INCLUIR' && statusAprovado) ||
-      (registroSubMaisRecente.__origem === 'RETIRAR' && !statusAprovado)
-    )
-      ? registroSubMaisRecente
-      : undefined
+  const pendenteRetirarCard = [...registrosRetirarDaMoto].sort(
+    (a, b) => tsRegistro(b) - tsRegistro(a)
+  )[0]
 
   function resetDevolucao() {
     setEtapaDevolucao(0)
