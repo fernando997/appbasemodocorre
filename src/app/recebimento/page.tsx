@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Bike, Camera, CheckCircle2, ChevronDown,
-  Filter, Loader2, Package, RefreshCw, Wrench, X,
+  Filter, Loader2, RefreshCw, Wrench, X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { PlacaCameraPicker } from '@/components/placa-camera-picker'
@@ -71,12 +71,6 @@ function fmtTS(ts: number) {
   return format(new Date(ts), 'dd/MM/yyyy', { locale: ptBR })
 }
 
-function isAtraso(moto: MotoAPI): boolean {
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
-  return new Date(moto['previsão de entrega']) < hoje
-}
-
 function moeda(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -97,11 +91,7 @@ export default function RecebimentoPage() {
       const data = await chamarBubble('recebimento-de-motos', { unidade }, 'json')
       if (data.status !== 'success') throw new Error(`status: ${data.status}`)
       const recebimento = data.response.recebimento ?? []
-      const locadoras: Record<string, unknown>[] = data.response.locadoras ?? []
-      const fornecedores: Record<string, unknown>[] = data.response.fornecedores ?? []
       const pedidos: Record<string, unknown>[] = data.response.pedido ?? []
-      setLocadorasMap(Object.fromEntries(locadoras.map((l) => [l._id as string, l.nome as string])))
-      setFornecedoresMap(Object.fromEntries(fornecedores.map((f) => [f._id as string, f['nome social'] as string])))
       setPedidosMap(Object.fromEntries(pedidos.map((p) => [p._id as string, p.numero as number])))
       setMotos(recebimento)
     } catch {
@@ -152,10 +142,6 @@ export default function RecebimentoPage() {
           _data_instalacao: registro['Data-confirmacao'] ?? registro.data,
         }
       })
-      const locadoras: Record<string, unknown>[] = data.response.locadoras ?? []
-      const fornecedores: Record<string, unknown>[] = data.response.fornecedores ?? []
-      setLocadorasMap(Object.fromEntries(locadoras.map((l) => [l._id as string, l.nome as string])))
-      setFornecedoresMap(Object.fromEntries(fornecedores.map((f) => [f._id as string, f['nome social'] as string])))
       setMotos((prev) => [
         ...prev.filter((m) => m.status_veiculo_desc === STATUS_TRANSITO),
         ...(filaMotos as MotoAPI[]),
@@ -192,20 +178,34 @@ export default function RecebimentoPage() {
   const [fotoBusca, setFotoBusca] = useState<string | null>(null)
   const [fotoBuscaFile, setFotoBuscaFile] = useState<File | null>(null)
 
-  const [locadorasMap, setLocadorasMap] = useState<Record<string, string>>({})
-  const [fornecedoresMap, setFornecedoresMap] = useState<Record<string, string>>({})
+  // Dialog — resultado da busca (achar-moto-base)
+  const [buscandoMotoBubble, setBuscandoMotoBubble] = useState(false)
+  const [motoBubbleAberto, setMotoBubbleAberto] = useState(false)
+  const [resultadoMotoBubble, setResultadoMotoBubble] = useState<{
+    veiculo: Record<string, unknown>
+    locadora: Record<string, unknown> | null
+    fornecedor: Record<string, unknown> | null
+    placa: string
+    fotoUrl: string
+    fotoFile: File
+    dadosMotoData: Record<string, unknown>
+  } | null>(null)
+
+  // Localização — decide a unidade sem depender de filtro por unidade do usuário.
+  // Roda toda vez que uma moto é encontrada, sem cache.
+  type UnidadeLocalizada = { id: string; nome: string; distanciaMetros: number }
+  const [resolvendoUnidade, setResolvendoUnidade] = useState(false)
+  const [unidadeResolvida, setUnidadeResolvida] = useState<UnidadeLocalizada | null>(null)
+  const [erroUnidade, setErroUnidade] = useState<string | null>(null)
+  // Mais de uma unidade no mesmo raio (ex: duas no mesmo endereço) — o operador escolhe
+  const [unidadesCandidatas, setUnidadesCandidatas] = useState<UnidadeLocalizada[]>([])
+
   const [pedidosMap, setPedidosMap] = useState<Record<string, number>>({})
 
   // Dialog — Instalação
   const [ativaInstalacao, setAtivaInstalacao] = useState<string | null>(null)
   const [instalando, setInstalando] = useState(false)
   const instalandoRef = useRef(false)
-
-  // Filtro — aba Recebimento
-  const [fRec, setFRec] = useState({ status: '', dataInicio: '', dataFim: '' })
-  const [buscaChassi, setBuscaChassi] = useState('')
-  const [fRecAberto, setFRecAberto] = useState(false)
-  const fRecAtivos = Object.values(fRec).filter(Boolean).length + (buscaChassi ? 1 : 0)
 
   // Filtro — sub-aba Novo
   const [fNov, setFNov] = useState({ dataInicio: '', dataFim: '', chassi: '', placa: '' })
@@ -217,18 +217,6 @@ export default function RecebimentoPage() {
   const [fConAberto, setFConAberto] = useState(false)
   const fConAtivos = Object.values(fCon).filter(Boolean).length
 
-  const emTransito = motos
-    .filter((m) => m.status_veiculo_desc === STATUS_TRANSITO)
-    .filter((m) => {
-      const atraso = isAtraso(m)
-      if (fRec.status === 'aguardando' && atraso) return false
-      if (fRec.status === 'atraso' && !atraso) return false
-      const prev = new Date(m['previsão de entrega'])
-      if (fRec.dataInicio && prev < new Date(fRec.dataInicio + 'T00:00:00')) return false
-      if (fRec.dataFim    && prev > new Date(fRec.dataFim    + 'T23:59:59')) return false
-      if (buscaChassi && !m.chassi?.toLowerCase().includes(buscaChassi.toLowerCase())) return false
-      return true
-    })
 
   const naFila = motos
     .filter((m) => m.status_veiculo_desc === STATUS_RECEBIDA)
@@ -274,23 +262,11 @@ export default function RecebimentoPage() {
     }
   }
 
-  function abrirDialog(id: string) {
-    setAtiva(id)
-    setFoto(null)
-    setFotoFile(null)
-    setPlacaInput('')
-    setDadosMoto(null)
-    setPedidoData(null)
-    setLendoPlaca(false)
-    setErroChassi(null)
-    setCorSelecionada('')
-    const moto = motos.find((m) => m._id === id)
-    if (moto?.processo === 'NOVO' && moto.pedido_compra) {
-      const numeroPedido = pedidosMap[moto.pedido_compra]
-      if (numeroPedido != null) consultarPedido(numeroPedido)
-    }
+  function fecharDialog() {
+    if (confirmando || lendoPlaca) return
+    setAtiva(null); setFoto(null); setFotoFile(null); setPlacaInput(''); setDadosMoto(null); setPedidoData(null); setErroChassi(null); setCorSelecionada('')
+    setUnidadeResolvida(null); setUnidadesCandidatas([]); setErroUnidade(null); setResultadoMotoBubble(null)
   }
-  function fecharDialog() { if (confirmando || lendoPlaca) return; setAtiva(null); setFoto(null); setFotoFile(null); setPlacaInput(''); setDadosMoto(null); setPedidoData(null); setErroChassi(null); setCorSelecionada('') }
 
   async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
     const blob = await (await fetch(dataUrl)).blob()
@@ -310,26 +286,132 @@ export default function RecebimentoPage() {
     setPlacaBusca('')
     setFotoBusca(null)
     setFotoBuscaFile(null)
+    // Localização primeiro — só libera a câmera (e a chamada FIPE) depois de resolvida
+    resolverUnidadeAtual()
   }
 
-  function abrirRecebimentoPorChassi(chassi: string, placa: string, dadosMotoData: Record<string, unknown>, fotoUrl: string, fotoFileData: File) {
-    const moto = motos.find((m) => m.status_veiculo_desc === STATUS_TRANSITO && m.chassi?.toUpperCase().trim() === chassi)
-    if (!moto) {
-      setErroBuscaFoto(`Chassi ${chassi} não encontrado na lista de recebimento.`)
-      return
+  // Busca a moto direto no Bubble pelo chassi (sem filtro de unidade) — substitui
+  // o antigo `motos.find(...)` que dependia da lista pré-carregada por unidade
+  async function abrirRecebimentoPorChassi(chassi: string, placa: string, dadosMotoData: Record<string, unknown>, fotoUrl: string, fotoFileData: File) {
+    setBuscandoMotoBubble(true)
+    setErroBuscaFoto(null)
+    setResultadoMotoBubble(null)
+    try {
+      const data = await chamarBubble('achar-moto-base', { chassi }, 'json')
+      const veiculo = data.response?.veiculo
+      if (!veiculo) {
+        setErroBuscaFoto(`Chassi ${chassi} não encontrado.`)
+        return
+      }
+      if (veiculo.status_veiculo_desc !== STATUS_TRANSITO) {
+        setErroBuscaFoto(`Esta moto não está disponível para recebimento (status atual: ${veiculo.status_veiculo_desc ?? 'desconhecido'}).`)
+        return
+      }
+      setResultadoMotoBubble({
+        veiculo,
+        locadora: data.response?.locadora ?? null,
+        fornecedor: data.response?.fornecedor ?? null,
+        placa,
+        fotoUrl,
+        fotoFile: fotoFileData,
+        dadosMotoData,
+      })
+      setCameraFiltroAberto(false)
+      setMotoBubbleAberto(true)
+    } catch {
+      setErroBuscaFoto('Erro ao consultar a moto.')
+    } finally {
+      setBuscandoMotoBubble(false)
     }
-    setCameraFiltroAberto(false)
-    setAtiva(moto._id)
+  }
+
+  // Sem filtro de unidade na tela: descobre onde o operador está fisicamente
+  // (GPS) e compara com a localização de todas as unidades (link do Google Maps).
+  // Roda do zero a cada recebimento — sem cache. Se o GPS falhar ou nenhuma
+  // unidade estiver num raio de 1km, trava e não deixa receber a moto.
+  async function resolverUnidadeAtual() {
+    setResolvendoUnidade(true)
+    setUnidadeResolvida(null)
+    setUnidadesCandidatas([])
+    setErroUnidade(null)
+    try {
+      const posicao = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) { reject(new Error('geolocation indisponível')); return }
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 })
+      })
+      const { latitude, longitude } = posicao.coords
+
+      const dataUnidades = await chamarBubble('achar-unidade', {}, 'json')
+      const unidades: Record<string, unknown>[] = dataUnidades.response?.unidade ?? []
+      if (unidades.length === 0) {
+        setErroUnidade('Nenhuma unidade cadastrada para comparar a localização.')
+        return
+      }
+
+      const res = await fetch('/api/localizar-unidade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: latitude,
+          lng: longitude,
+          unidades: unidades.map((u) => ({
+            id: u._id,
+            nome: u['Nome Unidade'],
+            link: u['End Link google '],
+          })),
+        }),
+      })
+      const data = await res.json()
+      const dentroDoRaio: UnidadeLocalizada[] = data?.unidades ?? []
+      if (!res.ok || dentroDoRaio.length === 0) {
+        setErroUnidade(data?.erro ?? 'Nenhuma unidade encontrada num raio de 1km da sua localização.')
+        return
+      }
+
+      // As unidades no raio precisam estar atreladas ao usuário
+      // (ex: usuário vinculado só à Sorocaba, mas fisicamente em Campinas → bloqueia)
+      let unidadesDoUsuario: string[] = []
+      try {
+        unidadesDoUsuario = (JSON.parse(localStorage.getItem('mc_unidades') ?? '[]') as { _id: string }[]).map((u) => u._id)
+      } catch {}
+      const permitidas = dentroDoRaio.filter((u) => unidadesDoUsuario.includes(u.id))
+
+      if (permitidas.length === 0) {
+        const nomes = dentroDoRaio.map((u) => u.nome).join(', ')
+        setErroUnidade(`Você não está vinculado à unidade ${nomes}. Não é possível receber motos por ela.`)
+        return
+      }
+
+      // Mais de uma unidade no mesmo raio (ex: duas no mesmo endereço) → operador escolhe
+      if (permitidas.length > 1) {
+        setUnidadesCandidatas(permitidas)
+        return
+      }
+
+      setUnidadeResolvida(permitidas[0])
+    } catch {
+      setErroUnidade('Não foi possível obter sua localização. Ative o GPS e tente novamente.')
+    } finally {
+      setResolvendoUnidade(false)
+    }
+  }
+
+  // Abre o dialog de recebimento de fato, só depois da unidade resolvida por GPS
+  function continuarParaRecebimento() {
+    if (!resultadoMotoBubble || !unidadeResolvida) return
+    const { veiculo, placa, fotoUrl, fotoFile, dadosMotoData } = resultadoMotoBubble
+    setMotoBubbleAberto(false)
+    setAtiva(String(veiculo._id))
     setFoto(fotoUrl)
-    setFotoFile(fotoFileData)
+    setFotoFile(fotoFile)
     setPlacaInput(placa)
     setDadosMoto(dadosMotoData)
     setPedidoData(null)
     setLendoPlaca(false)
     setErroChassi(null)
     setCorSelecionada('')
-    if (moto.processo === 'NOVO' && moto.pedido_compra) {
-      const numeroPedido = pedidosMap[moto.pedido_compra]
+    if (veiculo.processo === 'NOVO' && veiculo.pedido_compra) {
+      const numeroPedido = pedidosMap[veiculo.pedido_compra as string]
       if (numeroPedido != null) consultarPedido(numeroPedido)
     }
   }
@@ -427,7 +509,11 @@ export default function RecebimentoPage() {
         setDadosMoto(data.dadosMoto)
 
         const chassiFipe = (data.dadosMoto?.data?.veiculo?.chassi as string | undefined)?.toUpperCase().trim()
-        const chassiMoto = motos.find((m) => m._id === ativa)?.chassi?.toUpperCase().trim()
+        // motos achadas pelo fluxo novo (achar-moto-base) não estão na lista `motos`
+        // (que é filtrada por unidade) — usa o resultado da busca como alternativa
+        const chassiMotoLista = motos.find((m) => m._id === ativa)?.chassi
+        const chassiMotoBubble = resultadoMotoBubble?.veiculo.chassi as string | undefined
+        const chassiMoto = (chassiMotoLista ?? chassiMotoBubble)?.toUpperCase().trim()
 
         if (chassiFipe && chassiMoto && chassiFipe !== chassiMoto) {
           setErroChassi(`Placa não pertence a esta moto. Chassi FIPE: ${chassiFipe} · Chassi esperado: ${chassiMoto}`)
@@ -442,6 +528,7 @@ export default function RecebimentoPage() {
   }
   async function confirmarRecebimento() {
     if (!ativa || !foto || !fotoFile || !placaInput.trim() || !corSelecionada) return
+    if (!unidadeResolvida) return // sem localização confirmada, não recebe
     if (confirmandoRef.current) return
     confirmandoRef.current = true
     setConfirmando(true)
@@ -463,6 +550,8 @@ export default function RecebimentoPage() {
         placa: placaInput.trim().toUpperCase(),
         cor: corSelecionada,
         'foto-entrega': fotoUrl,
+        // Unidade decidida por localização (GPS), não mais por filtro do usuário
+        unidade: unidadeResolvida?.id ?? '',
       }
       if (veiculoDados?.marca_modelo) receberBody.modelo = String(veiculoDados.marca_modelo)
       if (veiculoDados?.ano)          receberBody['ano-modelo'] = String(veiculoDados.ano)
@@ -474,7 +563,9 @@ export default function RecebimentoPage() {
 
       const pagamento = pedidoData?.pagamento as Record<string, unknown>
       if (pagamento?.forma === 'pix_recebimento' && pagamento?.pago === 0) {
-        const moto = motos.find((m) => m._id === ativa)
+        // motos achadas pelo fluxo novo (achar-moto-base) não estão em `motos`
+        // (lista filtrada por unidade) — usa o resultado da busca como alternativa
+        const chassiMoto = motos.find((m) => m._id === ativa)?.chassi ?? (resultadoMotoBubble?.veiculo.chassi as string | undefined)
         await fetch(`${SUPABASE_URL}/receber-veiculo`, {
           method: 'POST',
           headers: {
@@ -483,7 +574,7 @@ export default function RecebimentoPage() {
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
             'x-api-key': BUBBLE_KEY,
           },
-          body: JSON.stringify({ pedido_numero: pedidoData?.numero, chassi: moto?.chassi }),
+          body: JSON.stringify({ pedido_numero: pedidoData?.numero, chassi: chassiMoto }),
         })
       }
 
@@ -493,6 +584,7 @@ export default function RecebimentoPage() {
           : m
       ))
       setAtiva(null); setFoto(null); setFotoFile(null); setPlacaInput(''); setCorSelecionada('')
+      setUnidadeResolvida(null); setUnidadesCandidatas([]); setErroUnidade(null); setResultadoMotoBubble(null)
     } catch {
     } finally {
       confirmandoRef.current = false
@@ -540,7 +632,6 @@ export default function RecebimentoPage() {
     )
   }
 
-  const totalTransito  = motos.filter((m) => m.status_veiculo_desc === STATUS_TRANSITO).length
   const totalRecebida  = motos.filter((m) => m.status_veiculo_desc === STATUS_RECEBIDA).length
   const totalInstalado = motos.filter((m) => m.status_veiculo_desc === STATUS_INSTALADO).length
 
@@ -559,11 +650,6 @@ export default function RecebimentoPage() {
           <TabsList className="w-full h-[35px]">
             <TabsTrigger value="recebimento" className="flex-1 gap-2 text-sm font-semibold">
               Recebimento
-              {totalTransito > 0 && (
-                <Badge className="bg-[#1B2043] text-[#8E92B3] border-[#2A2F5B] text-xs">
-                  {totalTransito}
-                </Badge>
-              )}
             </TabsTrigger>
             <TabsTrigger value="fila" className="flex-1 gap-2 text-sm font-semibold">
               Fila de Instalação
@@ -576,113 +662,22 @@ export default function RecebimentoPage() {
           </TabsList>
 
           {/* ABA RECEBIMENTO */}
-          <TabsContent value="recebimento" className="mt-5 space-y-4">
-
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <button
-                  onClick={() => setFRecAberto((v) => !v)}
-                  className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Filter className="w-4 h-4" />
-                  Filtros
-                  {fRecAtivos > 0 && (
-                    <Badge className="bg-blue-500/10 text-blue-600 border-blue-200 text-xs px-1.5 h-4">{fRecAtivos}</Badge>
-                  )}
-                  <ChevronDown className={`w-4 h-4 transition-transform ${fRecAberto ? 'rotate-180' : ''}`} />
-                </button>
-                <button onClick={abrirCameraFiltro} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                  <Camera className="w-4 h-4" />
-                  Buscar por foto
-                </button>
+          <TabsContent value="recebimento" className="mt-5">
+            <div className="flex flex-col items-center justify-center gap-4 py-16 text-center px-4">
+              <div className="w-20 h-20 rounded-2xl bg-[#1B2043] flex items-center justify-center">
+                <Camera className="w-9 h-9 text-white" />
               </div>
-
-              {fRecAberto && (
-                <div className="mt-3 p-4 border rounded-lg bg-muted/30 space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Chassi</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={buscaChassi}
-                        onChange={(e) => setBuscaChassi(e.target.value)}
-                        placeholder="Buscar por chassi..."
-                        className={`${selectClass} font-mono pr-8`}
-                      />
-                      {buscaChassi && (
-                        <button onClick={() => setBuscaChassi('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Status</label>
-                      <select value={fRec.status} onChange={(e) => setFRec((p) => ({ ...p, status: e.target.value }))} className={selectClass}>
-                        <option value="">Todos</option>
-                        <option value="aguardando">Aguardando</option>
-                        <option value="atraso">Atraso</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Previsão de entrega</label>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input type="date" value={fRec.dataInicio} onChange={(e) => setFRec((p) => ({ ...p, dataInicio: e.target.value }))} className={`${selectClass} min-w-0 flex-1`} />
-                      <span className="text-xs text-muted-foreground shrink-0">até</span>
-                      <input type="date" value={fRec.dataFim} onChange={(e) => setFRec((p) => ({ ...p, dataFim: e.target.value }))} className={`${selectClass} min-w-0 flex-1`} />
-                    </div>
-                  </div>
-                  {fRecAtivos > 0 && (
-                    <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => { setFRec({ status: '', dataInicio: '', dataFim: '' }); setBuscaChassi('') }}>
-                      <X className="w-3.5 h-3.5 mr-1.5" />Limpar filtros
-                    </Button>
-                  )}
-                </div>
-              )}
+              <div>
+                <p className="text-base font-semibold">Fotografe a placa da moto</p>
+                <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+                  A moto é localizada automaticamente, sem precisar escolher a unidade.
+                </p>
+              </div>
+              <Button onClick={abrirCameraFiltro} size="lg" className="bg-[#1B2043] hover:bg-[#262B59] text-white gap-2 mt-2">
+                <Camera className="w-4 h-4" />
+                Buscar moto por foto
+              </Button>
             </div>
-
-            {emTransito.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">Nenhuma moto em trânsito</div>
-            ) : (
-              emTransito.map((moto) => {
-                const atraso = isAtraso(moto)
-                return (
-                  <Card key={moto._id} className="shadow-sm">
-                    <CardContent className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-bold text-base">{moto.modelo} · {moto.cor}</p>
-                          <p className="text-xs font-mono text-muted-foreground mt-1">{moto.chassi}</p>
-                        </div>
-                        <Badge className={atraso ? 'bg-red-100 text-red-700 border-red-300 shrink-0' : 'bg-amber-100 text-amber-700 border-amber-300 shrink-0'}>
-                          {atraso ? 'Atraso' : 'Aguardando'}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                        {moto['previsão de entrega'] != null && (
-                          <div>
-                            <p className="text-muted-foreground text-xs mb-0.5">Previsão de entrega</p>
-                            <p className={`font-medium ${atraso ? 'text-red-600' : ''}`}>
-                              {fmtTS(moto['previsão de entrega'])}{atraso && ' — em atraso'}
-                            </p>
-                          </div>
-                        )}
-                        <div><p className="text-muted-foreground text-xs mb-0.5">Fornecedor</p><p className="font-medium truncate">{fornecedoresMap[moto.nota_fornecedor as string] ?? moto.nome_fornecedor ?? '—'}</p></div>
-                        <div><p className="text-muted-foreground text-xs mb-0.5">Locadora</p><p className="font-medium truncate">{locadorasMap[moto.locadora as string] ?? moto.nome_locadora ?? '—'}</p></div>
-                        {moto.pedido_compra && pedidosMap[moto.pedido_compra] != null && (
-                          <div><p className="text-muted-foreground text-xs mb-0.5">Pedido</p><p className="font-medium">#{pedidosMap[moto.pedido_compra]}</p></div>
-                        )}
-                      </div>
-                      <Button className="w-full bg-[#1B2043] hover:bg-[#262B59] text-white" onClick={() => abrirDialog(moto._id)}>
-                        <Package className="w-4 h-4" />Receber Moto
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )
-              })
-            )}
           </TabsContent>
 
           {/* ABA FILA DE INSTALAÇÃO */}
@@ -871,11 +866,23 @@ export default function RecebimentoPage() {
                   return null
                 })()}
               </DialogTitle>
-              {motoAtiva && (
-                <p className="text-sm text-muted-foreground">
-                  {motoAtiva.modelo} · {motoAtiva.cor}
-                  <span className="block font-mono text-xs mt-0.5">{motoAtiva.chassi}</span>
-                </p>
+              {(() => {
+                // motoAtiva vem da lista carregada por unidade; motos achadas pelo
+                // fluxo novo (sem filtro de unidade) não estão nela — usa o resultado
+                // da busca por chassi como alternativa
+                const info = motoAtiva ?? (resultadoMotoBubble?.veiculo as MotoAPI | undefined)
+                if (!info) return null
+                return (
+                  <p className="text-sm text-muted-foreground">
+                    {info.modelo} · {info.cor}
+                    <span className="block font-mono text-xs mt-0.5">{info.chassi}</span>
+                  </p>
+                )
+              })()}
+              {unidadeResolvida && (
+                <Badge className="bg-green-50 text-green-700 border-green-200 text-xs font-medium w-fit">
+                  Recebendo em: {unidadeResolvida.nome}
+                </Badge>
               )}
             </DialogHeader>
           </div>
@@ -997,7 +1004,7 @@ export default function RecebimentoPage() {
             )}
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={fecharDialog} disabled={confirmando || lendoPlaca}>Cancelar</Button>
-              <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={confirmarRecebimento} disabled={!foto || !placaInput.trim() || !corSelecionada || confirmando || lendoPlaca || !!erroChassi}>
+              <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={confirmarRecebimento} disabled={!foto || !placaInput.trim() || !corSelecionada || confirmando || lendoPlaca || !!erroChassi || !unidadeResolvida}>
                 {confirmando ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Confirmando...</> : <><CheckCircle2 className="w-4 h-4 mr-2" />Confirmar Recebimento</>}
               </Button>
             </div>
@@ -1006,7 +1013,7 @@ export default function RecebimentoPage() {
       </Dialog>
 
       {/* Dialog — Câmera filtro */}
-      <Dialog open={cameraFiltroAberto} onOpenChange={(open) => { if (!open && !buscandoPorFoto) { setCameraFiltroAberto(false) } }}>
+      <Dialog open={cameraFiltroAberto} onOpenChange={(open) => { if (!open && !buscandoPorFoto && !buscandoMotoBubble) { setCameraFiltroAberto(false) } }}>
         <DialogContent className="sm:max-w-md p-0 gap-0 flex flex-col max-h-[90dvh]">
           <div className="px-6 pt-6 pb-3 shrink-0">
             <DialogHeader>
@@ -1016,57 +1023,183 @@ export default function RecebimentoPage() {
           </div>
           <Separator />
           <div className="px-6 py-4 space-y-4 overflow-x-hidden overflow-y-auto flex-1">
-            {fotoBusca ? (
-              <div className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={fotoBusca} alt="Foto da placa" className="w-full h-36 object-cover rounded-lg border" />
-                {buscandoPorFoto && (
-                  <div className="absolute inset-0 bg-black/40 rounded-lg flex flex-col items-center justify-center gap-2 text-white">
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                    <span className="text-sm font-medium">Consultando FIPE...</span>
-                  </div>
-                )}
-                {!buscandoPorFoto && (
-                  <button onClick={() => { setFotoBusca(null); setFotoBuscaFile(null); setPlacaBusca(''); setErroBuscaFoto(null) }} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white">
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+            {/* Localização primeiro — só libera a câmera/FIPE depois de resolvida */}
+            {resolvendoUnidade && (
+              <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Localizando sua unidade...</p>
               </div>
-            ) : (
-              <PlacaCameraPicker
-                onCapture={onPlacaBuscaCapturada}
-                triggerHeightClassName="h-28"
-                accentBorderClassName="hover:border-blue-400 hover:text-blue-500"
-              />
             )}
 
-            {fotoBusca && !buscandoPorFoto && (
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Placa detectada</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={placaBusca}
-                    onChange={(e) => setPlacaBusca(e.target.value.toUpperCase())}
-                    placeholder="Ex: ABC1D23"
-                    maxLength={8}
-                    className="flex-1 px-3 py-2 text-sm font-mono uppercase border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-blue-600/30"
-                  />
-                  <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => consultarPlacaBusca(placaBusca)} disabled={!placaBusca.trim()}>
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Consultar FIPE
-                  </Button>
+            {!resolvendoUnidade && erroUnidade && (
+              <div className="flex flex-col items-center justify-center gap-3 py-6 text-center">
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 w-full">⚠ {erroUnidade}</p>
+                <Button variant="outline" size="sm" onClick={resolverUnidadeAtual}>
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
+
+            {/* Mais de uma unidade na mesma localização — operador escolhe qual */}
+            {!resolvendoUnidade && !erroUnidade && !unidadeResolvida && unidadesCandidatas.length > 1 && (
+              <div className="space-y-3 py-2">
+                <div className="text-center">
+                  <p className="text-sm font-semibold">Mais de uma unidade aqui</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Selecione em qual unidade você está recebendo a moto.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {unidadesCandidatas.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => { setUnidadeResolvida(u); setUnidadesCandidatas([]) }}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 border rounded-lg text-left hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                    >
+                      <span className="text-sm font-medium">{u.nome}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{Math.round(u.distanciaMetros)}m</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
 
-            {erroBuscaFoto && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">⚠ {erroBuscaFoto}</p>
+            {!resolvendoUnidade && !erroUnidade && unidadeResolvida && (
+              <>
+                <Badge className="bg-green-50 text-green-700 border-green-200 text-xs font-medium">
+                  Unidade: {unidadeResolvida.nome}
+                </Badge>
+
+                {fotoBusca ? (
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={fotoBusca} alt="Foto da placa" className="w-full h-36 object-cover rounded-lg border" />
+                    {(buscandoPorFoto || buscandoMotoBubble) && (
+                      <div className="absolute inset-0 bg-black/40 rounded-lg flex flex-col items-center justify-center gap-2 text-white">
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                        <span className="text-sm font-medium">{buscandoPorFoto ? 'Consultando FIPE...' : 'Buscando moto...'}</span>
+                      </div>
+                    )}
+                    {!buscandoPorFoto && !buscandoMotoBubble && (
+                      <button onClick={() => { setFotoBusca(null); setFotoBuscaFile(null); setPlacaBusca(''); setErroBuscaFoto(null) }} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 text-white">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <PlacaCameraPicker
+                    onCapture={onPlacaBuscaCapturada}
+                    triggerHeightClassName="h-28"
+                    accentBorderClassName="hover:border-blue-400 hover:text-blue-500"
+                  />
+                )}
+
+                {fotoBusca && !buscandoPorFoto && !buscandoMotoBubble && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Placa detectada</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={placaBusca}
+                        onChange={(e) => setPlacaBusca(e.target.value.toUpperCase())}
+                        placeholder="Ex: ABC1D23"
+                        maxLength={8}
+                        className="flex-1 px-3 py-2 text-sm font-mono uppercase border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-blue-600/30"
+                      />
+                      <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => consultarPlacaBusca(placaBusca)} disabled={!placaBusca.trim()}>
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Consultar FIPE
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {erroBuscaFoto && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">⚠ {erroBuscaFoto}</p>
+                )}
+              </>
             )}
           </div>
           <div className="px-6 pb-6 pt-0">
-            <Button variant="outline" className="w-full" onClick={() => setCameraFiltroAberto(false)} disabled={buscandoPorFoto}>Cancelar</Button>
+            <Button variant="outline" className="w-full" onClick={() => setCameraFiltroAberto(false)} disabled={buscandoPorFoto || buscandoMotoBubble}>Cancelar</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog — Resultado da busca (achar-moto-base) */}
+      <Dialog open={motoBubbleAberto} onOpenChange={(open) => { if (!open) { setMotoBubbleAberto(false); setResultadoMotoBubble(null); setUnidadeResolvida(null); setUnidadesCandidatas([]); setErroUnidade(null) } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Moto localizada</DialogTitle>
+          </DialogHeader>
+          {resultadoMotoBubble && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Placa</p>
+                  <p className="font-mono font-semibold">{resultadoMotoBubble.placa || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Chassi</p>
+                  <p className="font-mono font-semibold">{String(resultadoMotoBubble.veiculo.chassi ?? '—')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Modelo</p>
+                  <p className="font-semibold">{String(resultadoMotoBubble.veiculo.modelo ?? '—')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Cor</p>
+                  <p className="font-semibold">{String(resultadoMotoBubble.veiculo.cor ?? '—')}</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Locadora</p>
+                <p className="text-sm font-semibold">{String(resultadoMotoBubble.locadora?.nome ?? 'Não informada')}</p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fornecedor</p>
+                <p className="text-sm font-semibold">{String(resultadoMotoBubble.fornecedor?.['nome social'] ?? 'Não informado')}</p>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unidade (por localização)</p>
+                {resolvendoUnidade && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Obtendo sua localização...
+                  </div>
+                )}
+                {!resolvendoUnidade && unidadeResolvida && (
+                  <p className="text-sm font-semibold text-green-700">
+                    {unidadeResolvida.nome} <span className="text-xs text-muted-foreground font-normal">({Math.round(unidadeResolvida.distanciaMetros)}m)</span>
+                  </p>
+                )}
+                {!resolvendoUnidade && erroUnidade && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">⚠ {erroUnidade}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setMotoBubbleAberto(false); setResultadoMotoBubble(null); setUnidadeResolvida(null); setUnidadesCandidatas([]); setErroUnidade(null) }}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={resolvendoUnidade || !unidadeResolvida}
+                  onClick={continuarParaRecebimento}
+                >
+                  Continuar
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
