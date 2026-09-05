@@ -335,14 +335,45 @@ export default function RecebimentoPage() {
     setUnidadesCandidatas([])
     setErroUnidade(null)
     try {
-      const posicao = await new Promise<GeolocationPosition>((resolve, reject) => {
-        if (!navigator.geolocation) { reject(new Error('geolocation indisponível')); return }
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 })
-      })
+      // O navegador só expõe geolocalização em contexto seguro (https ou localhost).
+      // Acessando por IP em http o GPS pode estar ligado e mesmo assim falhar aqui.
+      if (!navigator.geolocation) {
+        setErroUnidade(
+          window.isSecureContext === false
+            ? 'A localização exige acesso por HTTPS. Abra o sistema pelo endereço seguro (https) para receber motos.'
+            : 'Este navegador não oferece geolocalização.'
+        )
+        return
+      }
+
+      let posicao: GeolocationPosition
+      try {
+        posicao = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 })
+        })
+      } catch (err) {
+        const geoErr = err as GeolocationPositionError
+        if (geoErr?.code === 1) {
+          setErroUnidade('Permissão de localização negada. Libere o acesso à localização para este site e tente novamente.')
+        } else if (geoErr?.code === 2) {
+          setErroUnidade('Não foi possível determinar sua posição. Verifique se o GPS está ativo e tente novamente.')
+        } else if (geoErr?.code === 3) {
+          setErroUnidade('Tempo esgotado ao obter sua localização. Tente novamente, de preferência em local aberto.')
+        } else {
+          setErroUnidade(`Erro ao obter a localização: ${geoErr?.message ?? String(err)}`)
+        }
+        return
+      }
       const { latitude, longitude } = posicao.coords
 
-      const dataUnidades = await chamarBubble('achar-unidade', {}, 'json')
-      const unidades: Record<string, unknown>[] = dataUnidades.response?.unidade ?? []
+      let unidades: Record<string, unknown>[] = []
+      try {
+        const dataUnidades = await chamarBubble('achar-unidade', {}, 'json')
+        unidades = dataUnidades.response?.unidade ?? []
+      } catch (err) {
+        setErroUnidade(`Não foi possível carregar as unidades para comparar a localização. ${String(err)}`)
+        return
+      }
       if (unidades.length === 0) {
         setErroUnidade('Nenhuma unidade cadastrada para comparar a localização.')
         return
@@ -389,8 +420,8 @@ export default function RecebimentoPage() {
       }
 
       setUnidadeResolvida(permitidas[0])
-    } catch {
-      setErroUnidade('Não foi possível obter sua localização. Ative o GPS e tente novamente.')
+    } catch (err) {
+      setErroUnidade(`Erro ao definir a unidade pela localização: ${String(err)}`)
     } finally {
       setResolvendoUnidade(false)
     }
