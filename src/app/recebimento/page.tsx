@@ -58,6 +58,8 @@ type MotoAPI = {
   _foto?: string
   _data_recebimento?: number
   _data_instalacao?: number
+  _recebido_por?: string
+  _instalado_por?: string
   nota_arquivo?: string
   processo?: string
   pedido_compra?: string
@@ -108,6 +110,8 @@ export default function RecebimentoPage() {
       const unidade = getUnidadesAtivas()
       const data = await chamarBubble('instalacao-motos', { unidade }, 'json')
       if (data.status !== 'success') throw new Error(`status: ${data.status}`)
+      const locadoras: Record<string, unknown>[] = data.response.locadoras ?? []
+      setLocadorasMap(Object.fromEntries(locadoras.map((l) => [l._id as string, l.nome as string])))
       const fila1Raw: Record<string, unknown>[] = data.response['instalação 1'] ?? []
       const fila2Raw: Record<string, unknown>[] = data.response['instalação 2'] ?? []
       const fila1 = fila1Raw.filter((item, idx, arr) =>
@@ -126,6 +130,7 @@ export default function RecebimentoPage() {
           status_veiculo_desc: STATUS_RECEBIDA,
           _data_recebimento: (item as Record<string, unknown>).data,
           _placa: veiculo.placa ?? (item as Record<string, unknown>).PLACA,
+          _recebido_por: (item as Record<string, unknown>).user,
         }
       })
       const instalacao3Raw: Record<string, unknown>[] = data.response['instalação 3'] ?? []
@@ -140,6 +145,7 @@ export default function RecebimentoPage() {
           status_veiculo_desc: STATUS_INSTALADO,
           _placa: registro.PLACA ?? (veiculo as Record<string, unknown>).placa,
           _data_instalacao: registro['Data-confirmacao'] ?? registro.data,
+          _instalado_por: registro.user,
         }
       })
       setMotos((prev) => [
@@ -201,6 +207,19 @@ export default function RecebimentoPage() {
   const [unidadesCandidatas, setUnidadesCandidatas] = useState<UnidadeLocalizada[]>([])
 
   const [pedidosMap, setPedidosMap] = useState<Record<string, number>>({})
+  const [locadorasMap, setLocadorasMap] = useState<Record<string, string>>({})
+
+  // Nome das unidades — vem do que já está salvo no login (mc_unidades),
+  // sem precisar de outra chamada só pra isso. Lido em useEffect (não no
+  // initializer do useState) porque a página é prerenderizada no servidor,
+  // onde localStorage não existe.
+  const [unidadesMap, setUnidadesMap] = useState<Record<string, string>>({})
+  useEffect(() => {
+    try {
+      const unidades = JSON.parse(localStorage.getItem('mc_unidades') ?? '[]') as { _id: string; 'Nome Unidade': string }[]
+      setUnidadesMap(Object.fromEntries(unidades.map((u) => [u._id, u['Nome Unidade']])))
+    } catch {}
+  }, [])
 
   // Dialog — Instalação
   const [ativaInstalacao, setAtivaInstalacao] = useState<string | null>(null)
@@ -208,12 +227,12 @@ export default function RecebimentoPage() {
   const instalandoRef = useRef(false)
 
   // Filtro — sub-aba Novo
-  const [fNov, setFNov] = useState({ dataInicio: '', dataFim: '', chassi: '', placa: '' })
+  const [fNov, setFNov] = useState({ dataInicio: '', dataFim: '', chassi: '', placa: '', locadora: '', unidade: '' })
   const [fNovAberto, setFNovAberto] = useState(false)
   const fNovAtivos = Object.values(fNov).filter(Boolean).length
 
   // Filtro — sub-aba Confirmado
-  const [fCon, setFCon] = useState({ dataInicio: '', dataFim: '' })
+  const [fCon, setFCon] = useState({ dataInicio: '', dataFim: '', locadora: '', unidade: '' })
   const [fConAberto, setFConAberto] = useState(false)
   const fConAtivos = Object.values(fCon).filter(Boolean).length
 
@@ -223,6 +242,8 @@ export default function RecebimentoPage() {
     .filter((m) => {
       if (fNov.chassi && !m.chassi?.toLowerCase().includes(fNov.chassi.toLowerCase())) return false
       if (fNov.placa  && !(m._placa ?? '').toLowerCase().includes(fNov.placa.toLowerCase())) return false
+      if (fNov.locadora && !(locadorasMap[m.locadora as string] ?? '').toLowerCase().includes(fNov.locadora.toLowerCase())) return false
+      if (fNov.unidade  && !(unidadesMap[m.Unidade] ?? '').toLowerCase().includes(fNov.unidade.toLowerCase())) return false
       if (m._data_recebimento) {
         const dr = new Date(m._data_recebimento)
         if (fNov.dataInicio && dr < new Date(fNov.dataInicio + 'T00:00:00')) return false
@@ -234,6 +255,8 @@ export default function RecebimentoPage() {
   const instaladas = motos
     .filter((m) => m.status_veiculo_desc === STATUS_INSTALADO)
     .filter((m) => {
+      if (fCon.locadora && !(locadorasMap[m.locadora as string] ?? '').toLowerCase().includes(fCon.locadora.toLowerCase())) return false
+      if (fCon.unidade  && !(unidadesMap[m.Unidade] ?? '').toLowerCase().includes(fCon.unidade.toLowerCase())) return false
       if (m._data_instalacao) {
         const di = new Date(m._data_instalacao)
         if (fCon.dataInicio && di < new Date(fCon.dataInicio + 'T00:00:00')) return false
@@ -575,6 +598,7 @@ export default function RecebimentoPage() {
       // 2. chamar o workflow com a URL da foto
       const veiculo = (dadosMoto as Record<string, unknown>)?.data as Record<string, unknown> | undefined
       const veiculoDados = veiculo?.veiculo as Record<string, unknown> | undefined
+      const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
 
       const receberBody: Record<string, unknown> = {
         moto: ativa,
@@ -583,6 +607,7 @@ export default function RecebimentoPage() {
         'foto-entrega': fotoUrl,
         // Unidade decidida por localização (GPS), não mais por filtro do usuário
         unidade: unidadeResolvida?.id ?? '',
+        user: String(user?.Nome ?? user?.nome ?? ''),
       }
       if (veiculoDados?.marca_modelo) receberBody.modelo = String(veiculoDados.marca_modelo)
       if (veiculoDados?.ano)          receberBody['ano-modelo'] = String(veiculoDados.ano)
@@ -631,7 +656,11 @@ export default function RecebimentoPage() {
     instalandoRef.current = true
     setInstalando(true)
     try {
-      await chamarBubble('confirmar-instalação', { 'moto-instacao': ativaInstalacao }, 'form')
+      const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
+      await chamarBubble('confirmar-instalação', {
+        'moto-instacao': ativaInstalacao,
+        user: String(user?.Nome ?? user?.nome ?? ''),
+      }, 'form')
 
       setMotos((prev) => prev.map((m) =>
         m._id === ativaInstalacao
@@ -767,6 +796,20 @@ export default function RecebimentoPage() {
                             {fNov.placa && <button onClick={() => setFNov((p) => ({ ...p, placa: '' }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
                           </div>
                         </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Locadora</label>
+                          <div className="relative">
+                            <input type="text" value={fNov.locadora} onChange={(e) => setFNov((p) => ({ ...p, locadora: e.target.value }))} placeholder="Buscar..." className={`${selectClass} pr-8`} />
+                            {fNov.locadora && <button onClick={() => setFNov((p) => ({ ...p, locadora: '' }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Unidade</label>
+                          <div className="relative">
+                            <input type="text" value={fNov.unidade} onChange={(e) => setFNov((p) => ({ ...p, unidade: e.target.value }))} placeholder="Buscar..." className={`${selectClass} pr-8`} />
+                            {fNov.unidade && <button onClick={() => setFNov((p) => ({ ...p, unidade: '' }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
+                          </div>
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">Data de recebimento</label>
@@ -777,7 +820,7 @@ export default function RecebimentoPage() {
                         </div>
                       </div>
                       {fNovAtivos > 0 && (
-                        <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => setFNov({ dataInicio: '', dataFim: '', chassi: '', placa: '' })}>
+                        <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => setFNov({ dataInicio: '', dataFim: '', chassi: '', placa: '', locadora: '', unidade: '' })}>
                           <X className="w-3.5 h-3.5 mr-1.5" />Limpar filtros
                         </Button>
                       )}
@@ -802,10 +845,13 @@ export default function RecebimentoPage() {
                           {moto._data_recebimento && (
                             <div><p className="text-muted-foreground text-xs mb-0.5">Data do recebimento</p><p className="font-medium">{fmtTS(moto._data_recebimento)}</p></div>
                           )}
+                          {moto._recebido_por && <div><p className="text-muted-foreground text-xs mb-0.5">Recebido por</p><p className="font-medium truncate">{moto._recebido_por}</p></div>}
                           {moto.nota_arquivo && (
                             <div><p className="text-muted-foreground text-xs mb-0.5">Nota fiscal</p><a href={`https:${moto.nota_arquivo}`} target="_blank" rel="noreferrer" className="inline-flex items-center h-7 px-3 mt-0.5 text-xs font-medium rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors">Ver nota</a></div>
                           )}
                           {moto._placa && <div><p className="text-muted-foreground text-xs mb-0.5">Placa</p><p className="font-mono font-medium">{moto._placa}</p></div>}
+                          <div><p className="text-muted-foreground text-xs mb-0.5">Locadora</p><p className="font-medium truncate">{locadorasMap[moto.locadora as string] ?? '—'}</p></div>
+                          <div><p className="text-muted-foreground text-xs mb-0.5">Unidade</p><p className="font-medium truncate">{unidadesMap[moto.Unidade] ?? '—'}</p></div>
                         </div>
                         <Button variant="outline" className="w-full border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => abrirDialogInstalacao(moto._id)}>
                           <Wrench className="w-4 h-4" />Confirmar Instalação
@@ -834,6 +880,22 @@ export default function RecebimentoPage() {
 
                   {fConAberto && (
                     <div className="mt-3 p-4 border rounded-lg bg-muted/30 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Locadora</label>
+                          <div className="relative">
+                            <input type="text" value={fCon.locadora} onChange={(e) => setFCon((p) => ({ ...p, locadora: e.target.value }))} placeholder="Buscar..." className={`${selectClass} pr-8`} />
+                            {fCon.locadora && <button onClick={() => setFCon((p) => ({ ...p, locadora: '' }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Unidade</label>
+                          <div className="relative">
+                            <input type="text" value={fCon.unidade} onChange={(e) => setFCon((p) => ({ ...p, unidade: e.target.value }))} placeholder="Buscar..." className={`${selectClass} pr-8`} />
+                            {fCon.unidade && <button onClick={() => setFCon((p) => ({ ...p, unidade: '' }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
+                          </div>
+                        </div>
+                      </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">Data de instalação</label>
                         <div className="flex flex-wrap items-center gap-2">
@@ -843,7 +905,7 @@ export default function RecebimentoPage() {
                         </div>
                       </div>
                       {fConAtivos > 0 && (
-                        <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => setFCon({ dataInicio: '', dataFim: '' })}>
+                        <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => setFCon({ dataInicio: '', dataFim: '', locadora: '', unidade: '' })}>
                           <X className="w-3.5 h-3.5 mr-1.5" />Limpar filtros
                         </Button>
                       )}
@@ -868,10 +930,13 @@ export default function RecebimentoPage() {
                           {moto._data_instalacao && (
                             <div><p className="text-muted-foreground text-xs mb-0.5">Data de instalação</p><p className="font-medium">{fmtTS(moto._data_instalacao)}</p></div>
                           )}
+                          {moto._instalado_por && <div><p className="text-muted-foreground text-xs mb-0.5">Confirmado por</p><p className="font-medium truncate">{moto._instalado_por}</p></div>}
                           {moto.nota_arquivo && (
                             <div><p className="text-muted-foreground text-xs mb-0.5">Nota fiscal</p><a href={`https:${moto.nota_arquivo}`} target="_blank" rel="noreferrer" className="inline-flex items-center h-7 px-3 mt-0.5 text-xs font-medium rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors">Ver nota</a></div>
                           )}
                           {moto._placa && <div><p className="text-muted-foreground text-xs mb-0.5">Placa</p><p className="font-mono font-medium">{moto._placa}</p></div>}
+                          <div><p className="text-muted-foreground text-xs mb-0.5">Locadora</p><p className="font-medium truncate">{locadorasMap[moto.locadora as string] ?? '—'}</p></div>
+                          <div><p className="text-muted-foreground text-xs mb-0.5">Unidade</p><p className="font-medium truncate">{unidadesMap[moto.Unidade] ?? '—'}</p></div>
                         </div>
                       </CardContent>
                     </Card>
