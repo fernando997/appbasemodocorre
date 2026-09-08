@@ -621,19 +621,18 @@ export default function MovimentacaoPage() {
     : (veiculoNovoSub.status_veiculo_desc as string) === 'RESERVA')
 
   // Registro pendente de retirada (definindo se o card de Substituição deve indicar RETIRAR).
-  // O Bubble já entrega isso pronto: um registro só aparece em 'vistorias-retirar' quando
-  // a retirada dessa moto ainda está pendente — o 'status' nele é do INCLUIR (aprovado ou
-  // não), não indica se a retirada em si já foi feita, então não filtra por status aqui.
-  // 'vistorias-retirar' também traz registros de OUTRAS motos, então filtra só os que
-  // envolvem a moto consultada agora (placa1 = moto antiga, placa2 = moto nova) e pega o
-  // mais recente entre eles.
-  const veiculoFuncoesId = String((veiculoFuncoes as { _id?: string } | null)?._id ?? '')
-  const registrosRetirarDaMoto = vistoriasRetirar.filter(r =>
-    !!veiculoFuncoesId && (String(r.placa1 ?? '') === veiculoFuncoesId || String(r.placa2 ?? '') === veiculoFuncoesId)
-  )
-  const pendenteRetirarCard = [...registrosRetirarDaMoto].sort(
-    (a, b) => tsRegistro(b) - tsRegistro(a)
-  )[0]
+  // Junta 'vistorias-incluir' e 'vistorias-retirar' (o Bubble já devolve só as dessa moto) e
+  // olha o registro MAIS RECENTE entre as duas listas, pelo campo 'txt':
+  //   txt=RETIRAR e status=APROVADO → INCLUIR (retirada já concluída)
+  //   txt=INCLUIR e status=APROVADO → RETIRAR (acabou de incluir, falta retirar a antiga)
+  const registrosSub: Record<string, unknown>[] = [...vistoriasIncluir, ...vistoriasRetirar]
+  const registroSubMaisRecente = [...registrosSub].sort((a, b) => tsRegistro(b) - tsRegistro(a))[0]
+  const statusAprovado = String(registroSubMaisRecente?.status ?? '').trim().toUpperCase() === 'APROVADO'
+  const txtMaisRecente = String(registroSubMaisRecente?.txt ?? '').trim().toUpperCase()
+  const pendenteRetirarCard =
+    registroSubMaisRecente && statusAprovado && txtMaisRecente === 'INCLUIR'
+      ? registroSubMaisRecente
+      : undefined
 
   function resetDevolucao() {
     setEtapaDevolucao(0)
