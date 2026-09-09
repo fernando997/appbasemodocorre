@@ -1447,8 +1447,10 @@ export default function MovimentacaoPage() {
           )}
         </div>
 
-        {/* Card dados veículo */}
-        {!analisando && placa && veiculoFuncoes && (
+        {/* Card dados veículo — o Bubble pode mandar {} em vez de null quando a
+            placa não é encontrada, por isso checa a presença do _id, não só se
+            o objeto veiculoFuncoes existe */}
+        {!analisando && placa && veiculoFuncoes && !!veiculoFuncoes._id && (
           <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
             <div className="bg-[#1B2043] px-4 py-2.5 flex items-center gap-2">
               <CircleDot className="w-4 h-4 text-white/70" />
@@ -1466,6 +1468,19 @@ export default function MovimentacaoPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">KM</span>
                   <span className="text-sm font-semibold">{String(veiculoFuncoes.km)} km</span>
+                </div>
+              )}
+              {statusLocado && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Status do Contrato</span>
+                  <Badge variant="outline" className="text-xs font-semibold">
+                    {/* Contrato AUSENTE aqui significa que ele está EM FECHAMENTO.
+                        O Bubble pode mandar {} em vez de null quando não tem contrato,
+                        por isso checa a presença do _id, não só se o objeto existe. */}
+                    {(veiculoFuncoes.contrato as { _id?: string; status?: string } | undefined)?._id
+                      ? String((veiculoFuncoes.contrato as { status?: string }).status ?? '')
+                      : 'EM FECHAMENTO'}
+                  </Badge>
                 </div>
               )}
             </div>
@@ -1487,7 +1502,7 @@ export default function MovimentacaoPage() {
         )}
 
         {/* Seleção de ação - cards com ícone */}
-        {!analisando && placa && veiculoFuncoes && !acao && (
+        {!analisando && placa && veiculoFuncoes && !!veiculoFuncoes._id && !acao && (
           <div className="space-y-2">
             <p className="text-sm font-medium">O que deseja fazer?</p>
             <div className="grid grid-cols-2 gap-3">
