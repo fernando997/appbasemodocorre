@@ -111,7 +111,8 @@ export default function RecebimentoPage() {
       const data = await chamarBubble('instalacao-motos', { unidade }, 'json')
       if (data.status !== 'success') throw new Error(`status: ${data.status}`)
       const locadoras: Record<string, unknown>[] = data.response.locadoras ?? []
-      setLocadorasMap(Object.fromEntries(locadoras.map((l) => [l._id as string, l.nome as string])))
+      const locadorasMapAtual = Object.fromEntries(locadoras.map((l) => [l._id as string, l.nome as string]))
+      setLocadorasMap(locadorasMapAtual)
       const fila1Raw: Record<string, unknown>[] = data.response['instalação 1'] ?? []
       const fila2Raw: Record<string, unknown>[] = data.response['instalação 2'] ?? []
       const fila1 = fila1Raw.filter((item, idx, arr) =>
@@ -153,6 +154,25 @@ export default function RecebimentoPage() {
         ...(filaMotos as MotoAPI[]),
         ...(confirmados as MotoAPI[]),
       ])
+
+      // O 'locadoras' que vem junto de instalacao-motos pode não cobrir todas as
+      // locadoras que as motos da fila realmente referenciam — busca as que faltarem
+      const idsNecessarios = [...filaMotos, ...confirmados]
+        .map((m) => (m as Record<string, unknown>).locadora as string | undefined)
+        .filter((id): id is string => !!id)
+      const idsFaltando = [...new Set(idsNecessarios)].filter((id) => !(id in locadorasMapAtual))
+      if (idsFaltando.length > 0) {
+        chamarBubble('chamar-locadoras', { locadoras: JSON.stringify(idsFaltando) })
+          .then((res) => {
+            const lista: Record<string, unknown>[] = res?.response?.locadoras ?? []
+            if (lista.length === 0) return
+            setLocadorasMap((prev) => ({
+              ...prev,
+              ...Object.fromEntries(lista.map((l) => [l._id as string, (l.Nome ?? l.nome ?? l.Name ?? '-') as string])),
+            }))
+          })
+          .catch(() => {})
+      }
     } catch {
       setErroApi('Não foi possível carregar a fila de instalação.')
     } finally {
