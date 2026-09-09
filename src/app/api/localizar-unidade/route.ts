@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const RAIO_METROS = 1000
+const RAIO_METROS = 3000
 
 type UnidadeInput = { id: string; nome: string; link: string }
 type UnidadeResolvida = { id: string; nome: string; distanciaMetros: number }
@@ -60,12 +60,21 @@ export async function POST(req: NextRequest) {
     // Devolve TODAS as unidades dentro do raio, da mais perto pra mais longe —
     // duas unidades podem estar no mesmo endereço, e aí quem escolhe é o operador
     const dentroDoRaio: UnidadeResolvida[] = []
+    // DEBUG TEMPORÁRIO — todas as distâncias calculadas, mesmo fora do raio, pra diagnosticar
+    const todasDistancias: { nome: string; distanciaMetros: number | null; coords: { lat: number; lng: number } | null }[] = []
 
     for (const u of unidades as UnidadeInput[]) {
-      if (!u.link) continue
+      if (!u.link) {
+        todasDistancias.push({ nome: u.nome, distanciaMetros: null, coords: null })
+        continue
+      }
       const coords = await resolverCoordenadas(u.link)
-      if (!coords) continue
+      if (!coords) {
+        todasDistancias.push({ nome: u.nome, distanciaMetros: null, coords: null })
+        continue
+      }
       const dist = distanciaMetros(Number(lat), Number(lng), coords.lat, coords.lng)
+      todasDistancias.push({ nome: u.nome, distanciaMetros: Math.round(dist), coords })
       if (dist <= RAIO_METROS) {
         dentroDoRaio.push({ id: u.id, nome: u.nome, distanciaMetros: dist })
       }
@@ -73,7 +82,10 @@ export async function POST(req: NextRequest) {
 
     if (dentroDoRaio.length === 0) {
       return NextResponse.json(
-        { erro: 'Nenhuma unidade encontrada num raio de 1km da sua localização atual.' },
+        {
+          erro: 'Nenhuma unidade encontrada num raio de 3km da sua localização atual.',
+          debug: { latRecebido: lat, lngRecebido: lng, todasDistancias },
+        },
         { status: 404 }
       )
     }

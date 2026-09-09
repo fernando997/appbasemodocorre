@@ -351,7 +351,7 @@ export default function RecebimentoPage() {
   // Sem filtro de unidade na tela: descobre onde o operador está fisicamente
   // (GPS) e compara com a localização de todas as unidades (link do Google Maps).
   // Roda do zero a cada recebimento — sem cache. Se o GPS falhar ou nenhuma
-  // unidade estiver num raio de 1km, trava e não deixa receber a moto.
+  // unidade estiver num raio de 3km, trava e não deixa receber a moto.
   async function resolverUnidadeAtual() {
     setResolvendoUnidade(true)
     setUnidadeResolvida(null)
@@ -418,7 +418,7 @@ export default function RecebimentoPage() {
       const data = await res.json()
       const dentroDoRaio: UnidadeLocalizada[] = data?.unidades ?? []
       if (!res.ok || dentroDoRaio.length === 0) {
-        setErroUnidade(data?.erro ?? 'Nenhuma unidade encontrada num raio de 1km da sua localização.')
+        setErroUnidade(data?.erro ?? 'Nenhuma unidade encontrada num raio de 3km da sua localização.')
         return
       }
 
