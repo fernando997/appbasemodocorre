@@ -361,7 +361,7 @@ export default function FrotaStatusPage() {
             <div className={modo === 'tabela' ? '' : 'p-4'}>
               {modo === 'tabela' ? (
                 <div className="divide-y divide-[#1B2043]/6">
-                  <div className="hidden sm:grid grid-cols-[7rem_10rem_1fr_8rem_5rem] px-5 py-2.5 bg-[#1B2043]/[0.04] text-[11px] font-semibold text-[#1B2043]/60 uppercase tracking-wide gap-3">
+                  <div className="hidden md:grid grid-cols-[7rem_10rem_1fr_8rem_5rem] px-5 py-2.5 bg-[#1B2043]/[0.04] text-[11px] font-semibold text-[#1B2043]/60 uppercase tracking-wide gap-3">
                     <span>Placa</span>
                     <span>Chassi</span>
                     <span>Locadora</span>
@@ -374,13 +374,13 @@ export default function FrotaStatusPage() {
                     return (
                       <div
                         key={v.placa}
-                        className="relative grid grid-cols-[1fr_4.5rem] sm:grid-cols-[7rem_10rem_1fr_8rem_5rem] items-center px-5 py-3.5 gap-3 hover:bg-[#1B2043]/[0.03] transition-colors"
+                        className="relative grid grid-cols-[1fr_4.5rem] md:grid-cols-[7rem_10rem_1fr_8rem_5rem] items-center px-5 py-3.5 gap-3 hover:bg-[#1B2043]/[0.03] transition-colors"
                         style={{ animation: `cardEnter 0.4s cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 25, 350)}ms both` }}
                       >
                         <span className="font-mono text-sm font-semibold text-black w-fit sm:justify-self-start bg-[#1B2043]/6 px-2 py-1 rounded-md">{v.placa}</span>
-                        <p className="hidden sm:block text-xs text-black font-mono">{v.chassi ?? '-'}</p>
-                        <p className="hidden sm:block text-xs text-black truncate">{locadoraMap[v.locadora] ?? '-'}</p>
-                        <p className="hidden sm:block text-sm text-black truncate">{v.modelo}</p>
+                        <p className="hidden md:block text-xs text-black font-mono">{v.chassi ?? '-'}</p>
+                        <p className="hidden md:block text-xs text-black truncate">{locadoraMap[v.locadora] ?? '-'}</p>
+                        <p className="hidden md:block text-sm text-black truncate">{v.modelo}</p>
                         <div className="flex justify-end">
                           {dias != null && cor ? (
                             <span
