@@ -205,6 +205,9 @@ export default function RecebimentoPage() {
   const [erroUnidade, setErroUnidade] = useState<string | null>(null)
   // Mais de uma unidade no mesmo raio (ex: duas no mesmo endereço) — o operador escolhe
   const [unidadesCandidatas, setUnidadesCandidatas] = useState<UnidadeLocalizada[]>([])
+  // Coordenada que o GPS devolveu — mostrada como link no erro de "fora do raio",
+  // pra conferir visualmente se é mesmo a posição real do operador
+  const [coordenadaObtida, setCoordenadaObtida] = useState<{ lat: number; lng: number } | null>(null)
 
   const [pedidosMap, setPedidosMap] = useState<Record<string, number>>({})
   const [locadorasMap, setLocadorasMap] = useState<Record<string, string>>({})
@@ -357,6 +360,7 @@ export default function RecebimentoPage() {
     setUnidadeResolvida(null)
     setUnidadesCandidatas([])
     setErroUnidade(null)
+    setCoordenadaObtida(null)
     try {
       // O navegador só expõe geolocalização em contexto seguro (https ou localhost).
       // Acessando por IP em http o GPS pode estar ligado e mesmo assim falhar aqui.
@@ -388,6 +392,7 @@ export default function RecebimentoPage() {
         return
       }
       const { latitude, longitude } = posicao.coords
+      setCoordenadaObtida({ lat: latitude, lng: longitude })
 
       let unidades: Record<string, unknown>[] = []
       try {
@@ -1130,6 +1135,16 @@ export default function RecebimentoPage() {
             {!resolvendoUnidade && erroUnidade && (
               <div className="flex flex-col items-center justify-center gap-3 py-6 text-center">
                 <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 w-full">⚠ {erroUnidade}</p>
+                {coordenadaObtida && (
+                  <a
+                    href={`https://www.google.com/maps?q=${coordenadaObtida.lat},${coordenadaObtida.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-600 underline"
+                  >
+                    Ver no mapa a localização que o sistema capturou
+                  </a>
+                )}
                 <Button variant="outline" size="sm" onClick={resolverUnidadeAtual}>
                   <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                   Tentar novamente
