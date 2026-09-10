@@ -135,6 +135,16 @@ function extrairMensagemRegistro(registro: unknown): string {
   return JSON.stringify(registro)
 }
 
+// Traduz a mensagem bruta do registro (as 3 fixas que o Bubble devolve) pra
+// algo que faça sentido mostrar pro operador antes de finalizar a vistoria
+function mensagemAmigavelRegistro(raw: string): string {
+  const texto = raw.toLowerCase()
+  if (texto.includes('nenhuma placa registrada')) return 'Sua parte foi registrada. Aguardando a outra parte concluir a vistoria dela.'
+  if (texto.includes('placa nova')) return 'A vistoria da moto nova já foi concluída pelo cliente. Sua parte também foi registrada.'
+  if (texto.includes('placa antiga')) return 'A vistoria da moto antiga já foi concluída. Sua parte também foi registrada.'
+  return raw
+}
+
 function fmtData(ts: unknown): string {
   if (!ts) return '-'
   const d = new Date(ts as number)
@@ -415,7 +425,8 @@ export default function MovimentacaoPage() {
   const [videoDisponibilidade, setVideoDisponibilidade] = useState<string | null>(null)
   const [videoDisponibilidadeFile, setVideoDisponibilidadeFile] = useState<File | null>(null)
   const [enviandoVistoria, setEnviandoVistoria] = useState(false)
-  const [etapaEnvio, setEtapaEnvio] = useState<'upload' | 'vistoria' | 'concluido' | null>(null)
+  const [etapaEnvio, setEtapaEnvio] = useState<'upload' | 'registro' | 'vistoria' | 'concluido' | null>(null)
+  const [mensagemRegistroSub, setMensagemRegistroSub] = useState<string | null>(null)
   const [vistoriaSucesso, setVistoriaSucesso] = useState(false)
   // Devolução
   const [etapaDevolucao, setEtapaDevolucao] = useState(0)
@@ -651,6 +662,7 @@ export default function MovimentacaoPage() {
 
   function resetSubNova() {
     registroSubRef.current = null
+    setMensagemRegistroSub(null)
     setSubFase('placa')
     setModoSub(null)
     setPlacaEsperadaId('')
@@ -895,12 +907,27 @@ export default function MovimentacaoPage() {
     if (enviandoVistoria) return
     setEnviandoVistoria(true)
     setErro(null)
-    setEtapaEnvio('upload')
     try {
       const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
       const contratoObj = veiculoFuncoes?.contrato as { _id?: string; 'Numero ctr'?: number } | undefined
       const contratoId = contratoObj?._id ?? ''
       const numeroContrato = contratoObj?.['Numero ctr'] ?? ''
+
+      // Verifica se o cliente já terminou a vistoria da moto nova (ou se esta
+      // é a primeira ponta a terminar) — é a primeira coisa que faz, antes de
+      // gastar tempo gerando PDF/upload, e garante que o envio final só
+      // acontece depois dessa checagem responder
+      setEtapaEnvio('registro')
+      const modo = modoSub ?? 'INCLUIR'
+      let registroTexto = registroSubRef.current
+      if (registroTexto == null) {
+        const registro = await registrarVistoriaSubstituicao(contratoId, placaNovaSub.trim().toUpperCase(), placa.trim().toUpperCase(), modo)
+        registroTexto = extrairMensagemRegistro(registro)
+        registroSubRef.current = registroTexto
+      }
+      setMensagemRegistroSub(mensagemAmigavelRegistro(registroTexto))
+
+      setEtapaEnvio('upload')
 
       // Localização do dispositivo no momento da vistoria
       const localizacaoAtual = geoLocationDevolucao ?? await capturarLocalizacaoAtual()
@@ -945,16 +972,6 @@ export default function MovimentacaoPage() {
       const pdfAntigaUrl = await uploadArquivo(
         new File([pdfAntigaBlob], `VISTORIA-SUB-ANTIGA-${placa.trim().toUpperCase()}.pdf`, { type: 'application/pdf' })
       )
-
-      // Verifica se o cliente já terminou a vistoria da moto nova (ou se esta
-      // é a primeira ponta a terminar) — o Bubble decide o tratamento
-      const modo = modoSub ?? 'INCLUIR'
-      let registroTexto = registroSubRef.current
-      if (registroTexto == null) {
-        const registro = await registrarVistoriaSubstituicao(contratoId, placaNovaSub.trim().toUpperCase(), placa.trim().toUpperCase(), modo)
-        registroTexto = extrairMensagemRegistro(registro)
-        registroSubRef.current = registroTexto
-      }
 
       setEtapaEnvio('vistoria')
 
@@ -1278,15 +1295,32 @@ export default function MovimentacaoPage() {
     </div>
   )
 
-  // Progresso de envio reutilizável
-  const renderProgressoEnvio = (corPrimaria: string) => (
+  // Progresso de envio reutilizável — comRegistro liga a etapa extra de
+  // "verificando a outra parte" (só existe na Substituição)
+  const renderProgressoEnvio = (corPrimaria: string, comRegistro = false) => (
     <div className="rounded-xl border bg-gradient-to-b from-slate-50 to-white p-6 space-y-5">
       <div className="flex flex-col items-center gap-4">
-        <div className={`flex items-center gap-3 w-full transition-all duration-500 ${etapaEnvio === 'upload' ? 'opacity-100' : 'opacity-50'}`}>
+        {comRegistro && (
+          <div className={`flex items-center gap-3 w-full transition-all duration-500 ${etapaEnvio === 'registro' ? 'opacity-100' : 'opacity-50'}`}>
+            <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${
+              etapaEnvio === 'registro' ? `bg-${corPrimaria}-100 text-${corPrimaria}-600` : etapaEnvio === 'upload' || etapaEnvio === 'vistoria' || etapaEnvio === 'concluido' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+            }`}>
+              {etapaEnvio === 'registro' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            </div>
+            <div>
+              <p className="text-sm font-medium">Verificando substituição</p>
+              <p className="text-xs text-muted-foreground">
+                {etapaEnvio === 'registro' ? 'Consultando status da outra parte...' : (mensagemRegistroSub ?? '—')}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className={`flex items-center gap-3 w-full transition-all duration-500 ${etapaEnvio === 'upload' ? 'opacity-100' : etapaEnvio === 'vistoria' || etapaEnvio === 'concluido' ? 'opacity-50' : 'opacity-30'}`}>
           <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${
             etapaEnvio === 'upload' ? `bg-${corPrimaria}-100 text-${corPrimaria}-600` : etapaEnvio === 'vistoria' || etapaEnvio === 'concluido' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
           }`}>
-            {etapaEnvio === 'upload' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            {etapaEnvio === 'upload' ? <Loader2 className="w-4 h-4 animate-spin" /> : etapaEnvio === 'vistoria' || etapaEnvio === 'concluido' ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-2 h-2 rounded-full bg-gray-300" />}
           </div>
           <div>
             <p className="text-sm font-medium">Enviando arquivos</p>
@@ -2826,7 +2860,7 @@ export default function MovimentacaoPage() {
 
               {/* Progresso de envio */}
               {(enviandoVistoria || vistoriaSucesso) && (tipoSelecionado === 'DEVOLUÇÃO' || tipoSelecionado === 'SUBSTITUIÇÃO') && (
-                renderProgressoEnvio(tipoSelecionado === 'SUBSTITUIÇÃO' ? 'purple' : 'red')
+                renderProgressoEnvio(tipoSelecionado === 'SUBSTITUIÇÃO' ? 'purple' : 'red', tipoSelecionado === 'SUBSTITUIÇÃO')
               )}
 
               {/* Voltar para tipos (quando não está enviando) */}

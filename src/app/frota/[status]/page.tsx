@@ -138,16 +138,26 @@ export default function FrotaStatusPage() {
       const ids = [...new Set(filtrados.map((v) => v.locadora).filter(Boolean))]
       if (ids.length === 0) return
 
-      chamarBubble('chamar-locadoras', { locadoras: JSON.stringify(ids) })
-        .then((data) => {
-          const lista: Locadora[] = data?.response?.locadoras ?? []
-          const map: Record<string, string> = {}
-          for (const l of lista) {
-            map[l._id] = l.Nome ?? l.nome ?? l.Name ?? '-'
-          }
-          setLocadoraMap(map)
-        })
-        .catch(() => {})
+      // Pedir tudo de uma vez pode fazer o workflow devolver só parte das
+      // locadoras (limite do Bubble) — busca em lotes pra garantir que todas venham
+      const TAMANHO_LOTE = 50
+      const lotes: string[][] = []
+      for (let i = 0; i < ids.length; i += TAMANHO_LOTE) {
+        lotes.push(ids.slice(i, i + TAMANHO_LOTE))
+      }
+
+      lotes.forEach((lote) => {
+        chamarBubble('chamar-locadoras', { locadoras: JSON.stringify(lote) })
+          .then((data) => {
+            const lista: Locadora[] = data?.response?.locadoras ?? []
+            const map: Record<string, string> = {}
+            for (const l of lista) {
+              map[l._id] = l.Nome ?? l.nome ?? l.Name ?? '-'
+            }
+            setLocadoraMap((prev) => ({ ...prev, ...map }))
+          })
+          .catch(() => {})
+      })
     } catch {
       setVeiculos([])
     }
