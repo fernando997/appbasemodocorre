@@ -44,6 +44,16 @@ function extrairMensagemRegistro(registro: unknown): string {
   return JSON.stringify(registro)
 }
 
+// Traduz a mensagem bruta do registro (as 3 fixas que o Bubble devolve) pra
+// algo que faça sentido mostrar pro cliente antes de finalizar a vistoria
+function mensagemAmigavelRegistro(raw: string): string {
+  const texto = raw.toLowerCase()
+  if (texto.includes('nenhuma placa registrada')) return 'Sua parte foi registrada. Estamos aguardando a base concluir a vistoria da moto antiga.'
+  if (texto.includes('placa nova')) return 'A vistoria da moto nova já havia sido registrada. Atualizamos com os seus dados.'
+  if (texto.includes('placa antiga')) return 'A vistoria da moto antiga já foi concluída pela base. Sua parte também foi registrada.'
+  return raw
+}
+
 const FOTOS_ENTREGA = [
   { id: 'frente', label: 'Foto da Frente' },
   { id: 'ladoDireito', label: 'Lado Direito (lado do pesinho)' },
@@ -181,6 +191,8 @@ function VistoriaEntregaContent() {
   // Etapa 6 - Envio
   const [enviando, setEnviando] = useState(false)
   const [erroEnvio, setErroEnvio] = useState('')
+  const [envioStatus, setEnvioStatus] = useState<'pdf' | 'registro' | 'salvando'>('pdf')
+  const [mensagemRegistroSub, setMensagemRegistroSub] = useState<string | null>(null)
 
   const theme = STEP_THEMES[etapa] || STEP_THEMES[0]
 
@@ -409,6 +421,19 @@ function VistoriaEntregaContent() {
     setEnviando(true)
     setErroEnvio('')
     try {
+      // Registra/verifica quem já terminou a vistoria de substituição — é a
+      // primeira coisa que faz, antes de gerar PDF/subir arquivos, e garante
+      // que o envio final só acontece depois dessa checagem responder
+      setEnvioStatus('registro')
+      const registro = await chamarBubble('base-registro-vistoria-substituicao', {
+        contrato: contratoId ?? '',
+        'placa-nova': placa!.trim().toUpperCase(),
+        'placa-antiga': (placaContrato ?? '').trim().toUpperCase(),
+      }).catch(() => null)
+      const registroTexto = extrairMensagemRegistro(registro)
+      setMensagemRegistroSub(mensagemAmigavelRegistro(registroTexto))
+
+      setEnvioStatus('pdf')
       let localizacaoAtual = geoLocation
       if (!localizacaoAtual) {
         try {
@@ -474,14 +499,7 @@ function VistoriaEntregaContent() {
         throw new Error(`Erro ao enviar PDF: ${String(err)}`)
       }
 
-      // Registra/verifica quem já terminou a vistoria de substituição — a moto
-      // antiga pode ser finalizada pelo usuário (outra tela) antes ou depois desta
-      const registro = await chamarBubble('base-registro-vistoria-substituicao', {
-        contrato: contratoId ?? '',
-        'placa-nova': placa!.trim().toUpperCase(),
-        'placa-antiga': (placaContrato ?? '').trim().toUpperCase(),
-      }).catch(() => null)
-      const registroTexto = extrairMensagemRegistro(registro)
+      setEnvioStatus('salvando')
 
       const body = omitirVazios({
         PLACA_ANTIGA: (placaContrato ?? '').trim().toUpperCase(),
@@ -921,8 +939,12 @@ function VistoriaEntregaContent() {
               {enviando ? (
                 <>
                   <Loader2 className="w-16 h-16 animate-spin text-[#6C63FF]" />
-                  <h2 className="text-xl font-bold text-white text-center animate-pulse">Gerando PDF...</h2>
-                  <p className="text-sm text-white/60">Aguarde enquanto preparamos o relatorio.</p>
+                  <h2 className="text-xl font-bold text-white text-center animate-pulse">
+                    {envioStatus === 'pdf' ? 'Gerando PDF...' : envioStatus === 'registro' ? 'Verificando substituição...' : 'Salvando vistoria...'}
+                  </h2>
+                  <p className="text-sm text-white/60">
+                    {envioStatus === 'pdf' ? 'Aguarde enquanto preparamos o relatorio.' : envioStatus === 'registro' ? 'Consultando o status da outra parte.' : 'Quase lá.'}
+                  </p>
                 </>
               ) : erroEnvio ? (
                 <>
@@ -985,6 +1007,11 @@ function VistoriaEntregaContent() {
                 Vistoria concluida!
               </h2>
               <p className="text-sm text-white/60 text-center">O PDF foi gerado e baixado automaticamente.</p>
+              {mensagemRegistroSub && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4 w-full">
+                  <p className="text-sm text-white/80 text-center">{mensagemRegistroSub}</p>
+                </div>
+              )}
             </div>
           </div>
         )
