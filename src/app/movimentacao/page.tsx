@@ -637,11 +637,13 @@ export default function MovimentacaoPage() {
   //   txt=RETIRAR e status=APROVADO → INCLUIR (retirada já concluída)
   //   txt=INCLUIR e status=APROVADO → RETIRAR (acabou de incluir, falta retirar a antiga)
   const registrosSub: Record<string, unknown>[] = [...vistoriasIncluir, ...vistoriasRetirar]
-  const registroSubMaisRecente = [...registrosSub].sort((a, b) => tsRegistro(b) - tsRegistro(a))[0]
-  const statusAprovado = String(registroSubMaisRecente?.status ?? '').trim().toUpperCase() === 'APROVADO'
+  // Filtra por APROVADO antes de pegar o mais recente — um REPROVADO mais
+  // novo não pode fazer o código "esquecer" o último aprovado de verdade
+  const registrosSubAprovados = registrosSub.filter((r) => String(r.status ?? '').trim().toUpperCase() === 'APROVADO')
+  const registroSubMaisRecente = [...registrosSubAprovados].sort((a, b) => tsRegistro(b) - tsRegistro(a))[0]
   const txtMaisRecente = String(registroSubMaisRecente?.txt ?? '').trim().toUpperCase()
   const pendenteRetirarCard =
-    registroSubMaisRecente && statusAprovado && txtMaisRecente === 'INCLUIR'
+    registroSubMaisRecente && txtMaisRecente === 'INCLUIR'
       ? registroSubMaisRecente
       : undefined
 
