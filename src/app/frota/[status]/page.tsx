@@ -2,20 +2,123 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Bike, Layers, Clock, ClipboardList, Trophy, List as ListIcon, LayoutGrid, Building2, Fingerprint, Filter, ChevronDown, X, MapPin } from 'lucide-react'
+import { ArrowLeft, Bike, Layers, Clock, ClipboardList, Trophy, List as ListIcon, LayoutGrid, Building2, Fingerprint, Filter, ChevronDown, X, MapPin, FileText, Loader2, Video, Wrench, ClipboardCheck, AlertTriangle, Lock, CheckCircle2, Info, LogIn, LogOut, Gauge } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
+import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function chamarBubble(endpoint: string, body: Record<string, unknown>): Promise<any> {
+async function chamarBubble(endpoint: string, body: Record<string, unknown>, versionTest?: boolean): Promise<any> {
   const res = await fetch('/api/bubble', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint, body }),
+    body: JSON.stringify({ endpoint, body, versionTest }),
   })
   return res.json()
 }
 
+type Contrato = {
+  _id: string
+  'Numero ctr'?: number
+  status?: string
+  'tipo de contrato'?: string
+  inicio?: number
+  fim?: number
+  url_contrato?: string
+  contrato_assinado?: string
+  cliente?: string
+  [key: string]: unknown
+}
+
+type Movimentacao = {
+  _id: string
+  'data de entrada'?: number
+  'data de saida'?: number
+  Fornecedor?: string
+  observação?: string
+  status?: string
+  contrato_atrelado?: string
+  'km inicial'?: number
+  'km final'?: number
+  [key: string]: unknown
+}
+
+type Vistoria = {
+  _id: string
+  data?: number
+  tipo?: string
+  vistoriador?: string
+  vistoria_pdf?: string
+  VIDEO?: string
+  [key: string]: unknown
+}
+
+type ResumoMoto = {
+  contrato: Contrato[]
+  movimentacao: Movimentacao[]
+  fornecedor: Locadora[]
+  vistorias: Vistoria[]
+}
+
+function formatarData(ms: number | undefined): string {
+  if (!ms) return '-'
+  return new Date(ms).toLocaleDateString('pt-BR')
+}
+
+function normalizar(str: string): string {
+  return str.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase()
+}
+
+// Cada status pede uma informação diferente no popup — oficina não interessa
+// pra quem tá disponível, contrato não interessa pra quem tá em vistoria etc.
+// Essa categoria decide o que mostrar e qual cor/ícone usar no popup.
+type Categoria = 'oficina' | 'manutencao' | 'vistoria' | 'sinistro' | 'bloqueado' | 'locado' | 'disponivel' | 'inativo' | 'generico'
+
+function categorizarStatus(status: string): Categoria {
+  const s = normalizar(status)
+  if (s.includes('OFICINA')) return 'oficina'
+  if (s.includes('MANUTEN')) return 'manutencao'
+  if (s.includes('VISTORIA')) return 'vistoria'
+  if (s.includes('SINISTRO')) return 'sinistro'
+  if (s.includes('BLOQUE') || s.includes('IRREGULAR')) return 'bloqueado'
+  if (s.includes('LOCAD') || s.includes('ALUGAD')) return 'locado'
+  if (s.includes('DISPON')) return 'disponivel'
+  if (s.includes('INATIVO')) return 'inativo'
+  return 'generico'
+}
+
+// Visual por categoria — mistura dos dois modais de referência (popup.txt):
+// chip/ícone no formato "Ficha" (Ctrl+M) e banner em degradê no formato
+// "Parcelas" (Ctrl+L), incluindo o estado "urgente" (alerta vermelho pulsante).
+const CATEGORIA_VISUAL: Record<Categoria, {
+  label: string
+  chipBg: string; chipText: string
+  iconBg: string; iconText: string
+  bannerGrad: string
+  urgente?: boolean
+}> = {
+  disponivel: { label: 'Disponível na base',                 chipBg: '#E2F4E5', chipText: '#137A45', iconBg: '#E2F4E5', iconText: '#137A45', bannerGrad: '#F3FBF5' },
+  locado:     { label: 'Locada',                              chipBg: '#E7ECFB', chipText: '#2C4BC4', iconBg: '#EAF0FE', iconText: '#2C4BC4', bannerGrad: '#F4F8FF' },
+  vistoria:   { label: 'Em vistoria',                         chipBg: '#E7ECFB', chipText: '#2C4BC4', iconBg: '#EAF0FE', iconText: '#2C4BC4', bannerGrad: '#F4F8FF' },
+  oficina:    { label: 'Em manutenção — oficina de terceiros', chipBg: '#FFF4E2', chipText: '#9A6B12', iconBg: '#FFF4E2', iconText: '#9A6B12', bannerGrad: '#FFF9EF' },
+  manutencao: { label: 'Em manutenção',                       chipBg: '#FFF4E2', chipText: '#9A6B12', iconBg: '#FFF4E2', iconText: '#9A6B12', bannerGrad: '#FFF9EF' },
+  sinistro:   { label: 'Sinistro',                            chipBg: '#FDECEC', chipText: '#A32D2D', iconBg: '#FADCDC', iconText: '#A32D2D', bannerGrad: '#FFF1F1', urgente: true },
+  bloqueado:  { label: 'Bloqueada / irregular',               chipBg: '#FDECEC', chipText: '#A32D2D', iconBg: '#FADCDC', iconText: '#A32D2D', bannerGrad: '#FFF1F1', urgente: true },
+  inativo:    { label: 'Inativa',                             chipBg: '#F1F3F9', chipText: '#4A5265', iconBg: '#F1F3F9', iconText: '#4A5265', bannerGrad: '#F8F9FC' },
+  generico:   { label: 'Situação atual',                      chipBg: '#F1F3F9', chipText: '#4A5265', iconBg: '#F1F3F9', iconText: '#4A5265', bannerGrad: '#F8F9FC' },
+}
+
+const ICONE_CATEGORIA: Record<Categoria, typeof Wrench> = {
+  oficina: Wrench, manutencao: Wrench, vistoria: ClipboardCheck, sinistro: AlertTriangle,
+  bloqueado: Lock, locado: FileText, disponivel: CheckCircle2, inativo: Info, generico: Info,
+}
+
+const MC_AZUL = '#091E7C'
+
+type CampoInfo = { label: string; valor: string; mono?: boolean }
+
 type Veiculo = {
+  _id: string
   placa: string
   modelo: string
   cor: string
@@ -49,6 +152,7 @@ type Locadora = {
   Nome?: string
   nome?: string
   Name?: string
+  'nome social'?: string
 }
 
 function contarPor(veiculos: Veiculo[], campo: keyof Veiculo) {
@@ -113,6 +217,41 @@ export default function FrotaStatusPage() {
   const [locadoraMap, setLocadoraMap] = useState<Record<string, string>>({})
   const [unidadeMap, setUnidadeMap] = useState<Record<string, string>>({})
   const [modo, setModo] = useState<Modo>('tabela')
+
+  // Popup de resumo da moto
+  const [motoSelecionada, setMotoSelecionada] = useState<Veiculo | null>(null)
+  const [popupAberto, setPopupAberto] = useState(false)
+  const [resumo, setResumo] = useState<ResumoMoto | null>(null)
+  const [resumoCarregando, setResumoCarregando] = useState(false)
+  const [itemCopiado, setItemCopiado] = useState<string | null>(null)
+  const [abaPopup, setAbaPopup] = useState('geral')
+  // Nome do status de cada movimentação (id -> descrição) — vem do mesmo
+  // endpoint que a tela de Funções usa (status-de-movimentação)
+  const [statusMovMap, setStatusMovMap] = useState<Record<string, string>>({})
+
+  async function abrirResumo(v: Veiculo) {
+    setMotoSelecionada(v)
+    setPopupAberto(true)
+    setResumo(null)
+    setStatusMovMap({})
+    setAbaPopup('geral')
+    setResumoCarregando(true)
+    try {
+      const [resumoData, statusData] = await Promise.all([
+        chamarBubble('resumo-moto-base', { moto: v._id }),
+        chamarBubble('status-de-movimentação', { placa: v.placa }).catch(() => null),
+      ])
+      setResumo(resumoData?.response ?? null)
+      const statusmoviRaw: { _id?: string; descrição?: string; descricao?: string }[] = statusData?.response?.statusmovi ?? []
+      setStatusMovMap(Object.fromEntries(
+        statusmoviRaw.filter((s) => s._id).map((s) => [s._id as string, s.descrição ?? s.descricao ?? '-'])
+      ))
+    } catch {
+      setResumo(null)
+    } finally {
+      setResumoCarregando(false)
+    }
+  }
 
   // Filtros
   const [filtrosAbertos, setFiltrosAbertos] = useState(false)
@@ -181,6 +320,136 @@ export default function FrotaStatusPage() {
   const porModelo = contarPor(veiculosFiltrados, 'modelo')
   const diasValidos = veiculosFiltrados.map((v) => diasNoStatus(v.status_veiculo_date)).filter((d): d is number => d != null)
   const mediaDias = diasValidos.length > 0 ? Math.round(diasValidos.reduce((a, b) => a + b, 0) / diasValidos.length) : null
+
+  // Movimentação aberta (sem data de saída) = onde a moto está agora — é dali
+  // que vem a informação dinâmica por status (ex: qual oficina, se aplicável)
+  const movimentacaoAtual = resumo?.movimentacao.find((m) => !m['data de saida'])
+  const fornecedorAtual = movimentacaoAtual?.Fornecedor
+    ? resumo?.fornecedor.find((f) => f._id === movimentacaoAtual.Fornecedor)
+    : undefined
+  const fornecedorAtualNome = fornecedorAtual
+    ? fornecedorAtual['nome social'] ?? fornecedorAtual.Nome ?? fornecedorAtual.nome ?? fornecedorAtual.Name
+    : undefined
+  const contratoRecente = resumo?.contrato
+    ? [...resumo.contrato].sort((a, b) => (b['Numero ctr'] ?? 0) - (a['Numero ctr'] ?? 0))[0]
+    : undefined
+  const vistoriasRecentes = resumo?.vistorias
+    ? [...resumo.vistorias].sort((a, b) => (b.data ?? 0) - (a.data ?? 0)).slice(0, 20)
+    : []
+  const vistoriaRecente = vistoriasRecentes[0]
+
+  const categoria = categorizarStatus(statusNome)
+  const corCat = CATEGORIA_VISUAL[categoria]
+  const IconeCat = ICONE_CATEGORIA[categoria]
+  const diasStatus = motoSelecionada ? diasNoStatus(motoSelecionada.status_veiculo_date) : null
+
+  // Campos da seção "Identificação"
+  const camposIdentificacao: CampoInfo[] = motoSelecionada
+    ? [
+        { label: 'Chassi', valor: motoSelecionada.chassi ?? '-', mono: true },
+        { label: 'Locadora', valor: locadoraMap[motoSelecionada.locadora] ?? '-' },
+      ]
+    : []
+
+  // Banner "Situação atual" — texto principal/secundário muda conforme a categoria
+  let bannerLinha1 = '-'
+  let bannerLinha2: string | undefined
+  let bannerDireita: { label: string; valor: string } | undefined
+  if (categoria === 'oficina' || categoria === 'manutencao') {
+    bannerLinha1 = fornecedorAtualNome ?? 'Oficina não informada'
+    bannerLinha2 = movimentacaoAtual?.observação
+    bannerDireita = { label: 'Desde', valor: formatarData(movimentacaoAtual?.['data de entrada']) }
+  } else if (categoria === 'vistoria') {
+    bannerLinha1 = vistoriaRecente ? `${vistoriaRecente.tipo ?? 'Vistoria'} · ${vistoriaRecente.vistoriador ?? '-'}` : 'Nenhuma vistoria registrada'
+    bannerLinha2 = vistoriaRecente?.canal ? String(vistoriaRecente.canal) : undefined
+    if (vistoriaRecente) bannerDireita = { label: 'Data', valor: formatarData(vistoriaRecente.data) }
+  } else if (categoria === 'sinistro' || categoria === 'bloqueado') {
+    bannerLinha1 = fornecedorAtualNome ?? 'Prestador não informado'
+    bannerLinha2 = movimentacaoAtual?.observação
+    bannerDireita = { label: 'Desde', valor: formatarData(movimentacaoAtual?.['data de entrada']) }
+  } else if (categoria === 'locado') {
+    bannerLinha1 = contratoRecente ? `Contrato Nº ${contratoRecente['Numero ctr'] ?? '-'} · ${contratoRecente['tipo de contrato'] ?? '-'}` : 'Contrato não encontrado'
+    bannerLinha2 = typeof contratoRecente?.cliente === 'string' ? `Cliente: ${contratoRecente.cliente}` : undefined
+    if (contratoRecente) bannerDireita = { label: 'Até', valor: formatarData(contratoRecente.fim) }
+  } else if (categoria === 'disponivel') {
+    bannerLinha1 = 'Disponível na base'
+    bannerDireita = { label: 'Desde', valor: formatarData(movimentacaoAtual?.['data de entrada']) }
+  } else {
+    bannerLinha1 = movimentacaoAtual?.observação ?? 'Sem movimentação em aberto registrada'
+    if (movimentacaoAtual) bannerDireita = { label: 'Desde', valor: formatarData(movimentacaoAtual['data de entrada']) }
+  }
+
+  const linkContrato = contratoRecente?.contrato_assinado || contratoRecente?.url_contrato
+  const hrefContrato = linkContrato
+    ? (String(linkContrato).startsWith('http') ? String(linkContrato) : `https:${linkContrato}`)
+    : null
+
+  function nomeFornecedorPorId(id: string | undefined): string | undefined {
+    if (!id) return undefined
+    const f = resumo?.fornecedor.find((x) => x._id === id)
+    return f ? (f['nome social'] ?? f.Nome ?? f.nome ?? f.Name) : undefined
+  }
+
+  function numeroContratoPorId(id: string | undefined): number | undefined {
+    if (!id) return undefined
+    return resumo?.contrato.find((c) => c._id === id)?.['Numero ctr']
+  }
+
+  // Histórico de movimentação — timeline com as passagens mais recentes da moto
+  // (troca de oficina, retorno pra base, saída pra contrato etc.)
+  const movimentacoesOrdenadas = resumo
+    ? [...resumo.movimentacao].sort((a, b) => (b['data de entrada'] ?? 0) - (a['data de entrada'] ?? 0))
+    : []
+  const movimentacoesRecentes = movimentacoesOrdenadas.slice(0, 20)
+
+  // "Geral" mostra sempre o contrato mais recente, mudando só o rótulo
+  const camposContratoGeral: CampoInfo[] = contratoRecente
+    ? [
+        { label: categoria === 'locado' ? 'Contrato ativo' : 'Último contrato', valor: `Nº ${contratoRecente['Numero ctr'] ?? '-'}` },
+        { label: 'Tipo', valor: String(contratoRecente['tipo de contrato'] ?? '-') },
+        { label: 'Status', valor: String(contratoRecente.status ?? '-') },
+        { label: 'Período', valor: `${formatarData(contratoRecente.inicio)} até ${formatarData(contratoRecente.fim)}` },
+      ]
+    : []
+
+  function copiarValor(valor: string, chave: string) {
+    if (!valor || valor === '-') return
+    navigator.clipboard?.writeText(valor).then(() => {
+      setItemCopiado(chave)
+      setTimeout(() => setItemCopiado((k) => (k === chave ? null : k)), 1200)
+    }).catch(() => {})
+  }
+
+  // Grid de campos label/valor — mesmo padrão visual do modal de referência
+  // (linhas finas entre células, clique em cima copia o valor)
+  function renderCampoGrid(secao: string, campos: CampoInfo[]) {
+    if (campos.length === 0) return null
+    return (
+      <div>
+        <span className="block mt-4 mb-2.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9AA0AE]">{secao}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-[#E7E9F0] border border-[#E7E9F0] rounded-xl overflow-hidden">
+          {campos.map((campo, i) => {
+            const chave = `${secao}-${i}`
+            return (
+              <div
+                key={chave}
+                onClick={() => copiarValor(campo.valor, chave)}
+                className="relative bg-white px-3.5 py-2.5 cursor-pointer transition-colors hover:bg-[#FAFBFF] active:bg-[#F1F4FF]"
+              >
+                <span className="block text-[9.5px] font-semibold uppercase tracking-[0.1em] text-[#9AA0AE] mb-0.5">{campo.label}</span>
+                <span className={`block text-sm font-medium text-[#12141A] break-words leading-snug ${campo.mono ? 'font-mono tracking-wide' : ''}`}>
+                  {campo.valor}
+                </span>
+                {itemCopiado === chave && (
+                  <span className="absolute top-2.5 right-3.5 text-[9px] font-bold uppercase tracking-wide text-[#137A45]">copiado</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -384,7 +653,8 @@ export default function FrotaStatusPage() {
                     return (
                       <div
                         key={v.placa}
-                        className="relative grid grid-cols-[1fr_4.5rem] md:grid-cols-[7rem_10rem_1fr_8rem_5rem] items-center px-5 py-3.5 gap-3 hover:bg-[#1B2043]/[0.03] transition-colors"
+                        onClick={() => abrirResumo(v)}
+                        className="relative grid grid-cols-[1fr_4.5rem] md:grid-cols-[7rem_10rem_1fr_8rem_5rem] items-center px-5 py-3.5 gap-3 hover:bg-[#1B2043]/[0.03] transition-colors cursor-pointer"
                         style={{ animation: `cardEnter 0.4s cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 25, 350)}ms both` }}
                       >
                         <span className="font-mono text-sm font-semibold text-black w-fit sm:justify-self-start bg-[#1B2043]/6 px-2 py-1 rounded-md">{v.placa}</span>
@@ -429,7 +699,8 @@ export default function FrotaStatusPage() {
                     return (
                       <div
                         key={v.placa}
-                        className="group relative rounded-2xl p-4 border border-transparent transition-shadow duration-200 hover:shadow-[0_10px_30px_rgba(27,32,67,0.12)]"
+                        onClick={() => abrirResumo(v)}
+                        className="group relative rounded-2xl p-4 border border-transparent transition-shadow duration-200 hover:shadow-[0_10px_30px_rgba(27,32,67,0.12)] cursor-pointer"
                         style={{
                           backgroundImage: `linear-gradient(white, white), ${gradienteBorda}`,
                           backgroundOrigin: 'border-box',
@@ -486,10 +757,274 @@ export default function FrotaStatusPage() {
         </div>
       </div>
 
+      <Dialog open={popupAberto} onOpenChange={setPopupAberto}>
+        <DialogContent className="popup-ficha-veiculo sm:max-w-2xl p-0 gap-0 overflow-hidden rounded-[18px]" showCloseButton={false}>
+          {/* Header no estilo "Ficha" (Ctrl+M): placa mercosul + eyebrow + chip de status */}
+          <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 border-b border-[#E9EBF2]">
+            <div className="relative w-[76px] sm:w-[100px] shrink-0 rounded-md border-2 overflow-hidden bg-white text-center" style={{ borderColor: '#12141A' }}>
+              <div className="h-3 sm:h-3.5 flex items-center justify-between px-1.5" style={{ background: MC_AZUL }}>
+                <span className="text-white font-sans" style={{ fontSize: 6, fontWeight: 700, letterSpacing: '.08em' }}>BRASIL</span>
+                <span className="text-white font-sans" style={{ fontSize: 6, fontWeight: 700 }}>BR</span>
+              </div>
+              <div className="py-1 sm:py-1.5 font-mono font-bold uppercase text-[#12141A] text-xs sm:text-[15px]" style={{ letterSpacing: 1.5 }}>
+                {motoSelecionada?.placa}
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] sm:text-[9.5px] font-bold uppercase tracking-[0.14em] text-[#8792AE]">Informações do veículo</p>
+              <p className="text-[15px] sm:text-[18px] font-semibold text-[#12141A] truncate leading-tight">{motoSelecionada?.modelo}</p>
+              <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                <span
+                  className="text-[9.5px] sm:text-[10.5px] font-bold uppercase tracking-wide px-2 sm:px-2.5 py-1 rounded-full"
+                  style={{ background: corCat.chipBg, color: corCat.chipText }}
+                >
+                  {motoSelecionada?.status_veiculo_desc}
+                </span>
+              </div>
+            </div>
+
+            <DialogClose className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[#4A5265] bg-[#F1F3F9] hover:bg-[#E4E8F1] transition-colors">
+              <X className="w-4 h-4" />
+            </DialogClose>
+          </div>
+
+          {/* KPIs no estilo "Parcelas" (Ctrl+L) */}
+          {resumo && (
+            <div className="grid grid-cols-3 gap-px bg-[#E9EBF2] border-b border-[#E9EBF2]">
+              <div className="flex items-center gap-2.5 bg-white px-3 sm:px-3.5 py-2.5 sm:py-3">
+                <span className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 bg-[#F1F3F9]">
+                  <Clock className="w-4 h-4 text-[#4A5265]" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wide text-[#9AA1B5]">Dias no status</p>
+                  <p className="text-sm font-semibold text-[#12141A]">{diasStatus != null ? `${diasStatus}d` : '-'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 bg-white px-3 sm:px-3.5 py-2.5 sm:py-3">
+                <span className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 bg-[#EAF0FE]">
+                  <FileText className="w-4 h-4 text-[#2C4BC4]" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wide text-[#9AA1B5]">Contratos</p>
+                  <p className="text-sm font-semibold text-[#12141A]">{resumo.contrato.length}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 bg-white px-3 sm:px-3.5 py-2.5 sm:py-3">
+                <span className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 bg-[#E2F4E5]">
+                  <ClipboardCheck className="w-4 h-4 text-[#137A45]" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wide text-[#9AA1B5]">Vistorias</p>
+                  <p className="text-sm font-semibold text-[#12141A]">{resumo.vistorias.length}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {resumoCarregando ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-[#9AA1B5]">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Carregando resumo...
+            </div>
+          ) : !resumo ? (
+            <div className="py-16 text-center text-sm text-[#9AA1B5]">Não foi possível carregar o resumo dessa moto.</div>
+          ) : (
+            <>
+              {/* Banner "Situação atual" no estilo "Parcelas" — vira alerta pulsante quando urgente */}
+              <div
+                className="flex items-center gap-3 sm:gap-3.5 px-4 sm:px-5 py-3 sm:py-3.5"
+                style={{ background: corCat.bannerGrad, borderLeft: corCat.urgente ? '4px solid #D14343' : undefined }}
+              >
+                <span className={`shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center ${corCat.urgente ? 'animate-pulse' : ''}`} style={{ background: corCat.iconBg }}>
+                  <IconeCat className="w-4.5 h-4.5 sm:w-5 sm:h-5" style={{ color: corCat.iconText }} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wide" style={{ color: corCat.urgente ? '#A32D2D' : '#8792AE' }}>{corCat.label}</p>
+                  <p className="text-[14px] sm:text-[15px] font-semibold text-[#12141A] truncate">{bannerLinha1}</p>
+                  {bannerLinha2 && <p className="text-xs text-[#697086] truncate">{bannerLinha2}</p>}
+                </div>
+                {bannerDireita && (
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] text-[#9AA1B5]">{bannerDireita.label}</p>
+                    <p className="text-[12px] sm:text-[13px] font-semibold text-[#12141A]">{bannerDireita.valor}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Abas — organiza o resto da informação em Geral / Histórico / Vistorias */}
+              <Tabs value={abaPopup} onValueChange={(v) => setAbaPopup(String(v))}>
+                <TabsList className="w-full grid grid-cols-3 rounded-none px-4 sm:px-5 pt-3 pb-0 bg-white">
+                  <TabsTrigger value="geral" className="text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">Geral</TabsTrigger>
+                  <TabsTrigger value="historico" className="text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">
+                    Histórico{movimentacoesOrdenadas.length > 0 ? ` (${movimentacoesOrdenadas.length})` : ''}
+                  </TabsTrigger>
+                  <TabsTrigger value="vistorias" className="text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">
+                    Vistorias{vistoriasRecentes.length > 0 ? ` (${vistoriasRecentes.length})` : ''}
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="geral" className="px-4 sm:px-5 py-4 max-h-[48vh] overflow-y-auto">
+                  {renderCampoGrid('Identificação', camposIdentificacao)}
+                  {renderCampoGrid(categoria === 'locado' ? 'Contrato' : 'Último contrato', camposContratoGeral)}
+                  {camposContratoGeral.length === 0 && camposIdentificacao.length === 0 && (
+                    <p className="text-sm text-[#9AA1B5] text-center py-6">Sem dados adicionais.</p>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="historico" className="px-4 sm:px-5 py-4 max-h-[48vh] overflow-y-auto">
+                  {movimentacoesRecentes.length === 0 ? (
+                    <p className="text-sm text-[#9AA1B5] text-center py-6">Nenhuma movimentação registrada.</p>
+                  ) : (
+                    movimentacoesRecentes.map((m) => {
+                      const nomeForn = nomeFornecedorPorId(m.Fornecedor)
+                      const aberta = !m['data de saida']
+                      const statusNomeM = m.status ? statusMovMap[m.status] : undefined
+                      const numContrato = numeroContratoPorId(m.contrato_atrelado)
+                      return (
+                        <div
+                          key={m._id}
+                          className="border border-[#E9EBF2] rounded-xl overflow-hidden mb-2 transition-all hover:border-[#C9D2E8] hover:shadow-[0_4px_14px_rgba(9,30,124,0.07)]"
+                        >
+                          {/* Status + situação */}
+                          <div className="flex items-center justify-between gap-2 px-3.5 py-2 bg-[#F8F9FC] border-b border-[#E9EBF2]">
+                            {statusNomeM ? (
+                              <span className="text-[10.5px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-[#EAF0FE] text-[#2C4BC4]">{statusNomeM}</span>
+                            ) : (
+                              <span className="text-[10.5px] font-medium text-[#9AA1B5]">Sem status</span>
+                            )}
+                            {aberta && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-[#137A45]">em andamento</span>
+                            )}
+                          </div>
+
+                          {/* Entrada / Saída */}
+                          <div className="grid grid-cols-2 divide-x divide-[#E9EBF2]">
+                            <div className="flex flex-col gap-1 px-3.5 py-2.5">
+                              <span className="flex items-center gap-1 text-[10.5px] font-semibold text-[#137A45]">
+                                <LogIn className="w-3.5 h-3.5" /> Entrada
+                              </span>
+                              <span className="text-xs font-mono text-[#12141A]">{formatarData(m['data de entrada'])}</span>
+                            </div>
+                            <div className="flex flex-col gap-1 px-3.5 py-2.5">
+                              <span className="flex items-center gap-1 text-[10.5px] font-semibold text-[#A32D2D]">
+                                <LogOut className="w-3.5 h-3.5" /> Saída
+                              </span>
+                              <span className="text-xs font-mono text-[#12141A]">{aberta ? '—' : formatarData(m['data de saida'])}</span>
+                            </div>
+                          </div>
+
+                          {/* KM inicial / final */}
+                          {(m['km inicial'] != null || m['km final'] != null) && (
+                            <div className="grid grid-cols-2 divide-x divide-[#E9EBF2] border-t border-[#E9EBF2]">
+                              <div className="flex items-center gap-1.5 px-3.5 py-2 text-xs">
+                                <Gauge className="w-3.5 h-3.5 text-[#9AA1B5]" />
+                                <span className="text-[#9AA1B5]">KM inicial</span>
+                                <span className="font-medium text-[#12141A] ml-auto">{m['km inicial'] ?? '-'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 px-3.5 py-2 text-xs">
+                                <Gauge className="w-3.5 h-3.5 text-[#9AA1B5]" />
+                                <span className="text-[#9AA1B5]">KM final</span>
+                                <span className="font-medium text-[#12141A] ml-auto">{m['km final'] ?? '-'}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Fornecedor / observação */}
+                          {(nomeForn || m.observação) && (
+                            <div className="px-3.5 py-2 border-t border-[#E9EBF2] bg-[#F8F9FC]/60">
+                              {nomeForn && <p className="text-xs font-semibold text-[#12141A]">{nomeForn}</p>}
+                              {m.observação && <p className="text-[11px] text-[#697086]">{m.observação}</p>}
+                            </div>
+                          )}
+
+                          {/* Contrato */}
+                          {numContrato != null && (
+                            <div className="flex items-center gap-2 px-3.5 py-2 border-t border-[#E9EBF2]">
+                              <span className="text-[11px] text-[#9AA1B5]">Contrato</span>
+                              <span className="text-xs font-mono font-semibold text-[#12141A]">Nº {numContrato}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </TabsContent>
+
+                <TabsContent value="vistorias" className="px-4 sm:px-5 py-4 max-h-[48vh] overflow-y-auto">
+                  {vistoriasRecentes.length === 0 ? (
+                    <p className="text-sm text-[#9AA1B5] text-center py-6">Nenhuma vistoria registrada.</p>
+                  ) : (
+                    vistoriasRecentes.map((vi) => (
+                      <div
+                        key={vi._id}
+                        className="flex flex-wrap items-center gap-3 px-3 sm:px-3.5 py-2.5 border border-[#E9EBF2] rounded-xl mb-1.5 transition-all hover:border-[#C9D2E8] hover:shadow-[0_4px_14px_rgba(9,30,124,0.07)] hover:-translate-y-px"
+                      >
+                        <span className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 bg-[#EAF0FE]">
+                          <ClipboardCheck className="w-4 h-4 text-[#2C4BC4]" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-[#12141A] truncate">{vi.tipo ?? '-'}</p>
+                          <p className="text-[11px] text-[#9AA1B5] truncate">{vi.vistoriador ?? '-'}</p>
+                        </div>
+                        <p className="text-xs font-semibold text-[#12141A] shrink-0">{formatarData(vi.data)}</p>
+                        {(vi.vistoria_pdf || vi.VIDEO) && (
+                          <div className="w-full sm:w-auto flex items-center gap-3 pl-11 sm:pl-0">
+                            {vi.vistoria_pdf && (
+                              <a href={`https:${vi.vistoria_pdf}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold hover:underline" style={{ color: MC_AZUL }}>
+                                <FileText className="w-3 h-3" /> PDF
+                              </a>
+                            )}
+                            {vi.VIDEO && (
+                              <a href={`https:${vi.VIDEO}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold hover:underline" style={{ color: MC_AZUL }}>
+                                <Video className="w-3 h-3" /> Vídeo
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </TabsContent>
+              </Tabs>
+
+              {/* Rodapé com ação principal no estilo "Ficha" */}
+              <div className="px-4 sm:px-5 py-3.5 border-t border-[#E9EBF2] bg-[#F8F9FC] flex flex-wrap items-center gap-2.5">
+                {hrefContrato ? (
+                  <a
+                    href={hrefContrato}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[11px] border border-[#E2E6F0] bg-white text-[12.5px] font-semibold text-[#12141A] transition-all hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(9,30,124,0.10)]"
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = MC_AZUL; e.currentTarget.style.color = MC_AZUL }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E2E6F0'; e.currentTarget.style.color = '#12141A' }}
+                  >
+                    <FileText className="w-3.5 h-3.5" /> Ver contrato
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[11px] border border-[#E2E6F0] bg-white text-[12.5px] font-semibold text-[#12141A] opacity-45">
+                    <FileText className="w-3.5 h-3.5" /> Sem contrato
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <style jsx>{`
         @keyframes cardEnter {
           0% { opacity: 0; transform: translateY(14px); }
           100% { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+      <style jsx global>{`
+        /* O global.css força um degradê roxo/navy em toda aba ativa (!important) —
+           aqui sobrescreve só pra esse popup, com uma cor clara e sólida.
+           Precisa de mais especificidade (classe .popup-ficha-veiculo) pra vencer. */
+        .popup-ficha-veiculo [data-slot="tabs-trigger"][data-active] {
+          background: #EAF0FE !important;
+          color: #2C4BC4 !important;
         }
       `}</style>
     </>
