@@ -758,7 +758,10 @@ export default function FrotaStatusPage() {
       </div>
 
       <Dialog open={popupAberto} onOpenChange={setPopupAberto}>
-        <DialogContent className="popup-ficha-veiculo sm:max-w-2xl p-0 gap-0 overflow-hidden rounded-[18px]" showCloseButton={false}>
+        <DialogContent className="popup-ficha-veiculo sm:max-w-2xl p-0 gap-0 rounded-[18px]" showCloseButton={false}>
+          {/* Wrapper só pra arredondar os cantos (clipping) — sem limitar altura,
+              quem controla o scroll é o DialogContent (overflow-y-auto nativo) */}
+          <div className="rounded-[18px] overflow-hidden">
           {/* Header no estilo "Ficha" (Ctrl+M): placa mercosul + eyebrow + chip de status */}
           <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 border-b border-[#E9EBF2]">
             <div className="relative w-[76px] sm:w-[100px] shrink-0 rounded-md border-2 overflow-hidden bg-white text-center" style={{ borderColor: '#12141A' }}>
@@ -854,17 +857,17 @@ export default function FrotaStatusPage() {
 
               {/* Abas — organiza o resto da informação em Geral / Histórico / Vistorias */}
               <Tabs value={abaPopup} onValueChange={(v) => setAbaPopup(String(v))}>
-                <TabsList className="w-full grid grid-cols-3 rounded-none px-4 sm:px-5 pt-3 pb-0 bg-white">
-                  <TabsTrigger value="geral" className="text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">Geral</TabsTrigger>
-                  <TabsTrigger value="historico" className="text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">
-                    Histórico{movimentacoesOrdenadas.length > 0 ? ` (${movimentacoesOrdenadas.length})` : ''}
+                <TabsList className="w-full grid grid-cols-3 gap-1 rounded-none px-2 sm:px-5 pt-3 pb-0 bg-white">
+                  <TabsTrigger value="geral" className="px-1 text-[11px] sm:text-sm text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">Geral</TabsTrigger>
+                  <TabsTrigger value="historico" className="px-1 text-[11px] sm:text-sm text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">
+                    <span className="truncate">Histórico{movimentacoesOrdenadas.length > 0 ? ` (${movimentacoesOrdenadas.length})` : ''}</span>
                   </TabsTrigger>
-                  <TabsTrigger value="vistorias" className="text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">
-                    Vistorias{vistoriasRecentes.length > 0 ? ` (${vistoriasRecentes.length})` : ''}
+                  <TabsTrigger value="vistorias" className="px-1 text-[11px] sm:text-sm text-[#697086] data-active:bg-[#EAF0FE] data-active:text-[#2C4BC4] hover:bg-[#F1F3F9] hover:text-[#12141A]">
+                    <span className="truncate">Vistorias{vistoriasRecentes.length > 0 ? ` (${vistoriasRecentes.length})` : ''}</span>
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="geral" className="px-4 sm:px-5 py-4 max-h-[48vh] overflow-y-auto">
+                <TabsContent value="geral" className="px-4 sm:px-5 py-4">
                   {renderCampoGrid('Identificação', camposIdentificacao)}
                   {renderCampoGrid(categoria === 'locado' ? 'Contrato' : 'Último contrato', camposContratoGeral)}
                   {camposContratoGeral.length === 0 && camposIdentificacao.length === 0 && (
@@ -872,7 +875,7 @@ export default function FrotaStatusPage() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="historico" className="px-4 sm:px-5 py-4 max-h-[48vh] overflow-y-auto">
+                <TabsContent value="historico" className="px-4 sm:px-5 py-4">
                   {movimentacoesRecentes.length === 0 ? (
                     <p className="text-sm text-[#9AA1B5] text-center py-6">Nenhuma movimentação registrada.</p>
                   ) : (
@@ -951,7 +954,7 @@ export default function FrotaStatusPage() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="vistorias" className="px-4 sm:px-5 py-4 max-h-[48vh] overflow-y-auto">
+                <TabsContent value="vistorias" className="px-4 sm:px-5 py-4">
                   {vistoriasRecentes.length === 0 ? (
                     <p className="text-sm text-[#9AA1B5] text-center py-6">Nenhuma vistoria registrada.</p>
                   ) : (
@@ -1009,6 +1012,7 @@ export default function FrotaStatusPage() {
               </div>
             </>
           )}
+          </div>
         </DialogContent>
       </Dialog>
 
