@@ -28,14 +28,33 @@ async function chamarBubbleServer(endpoint: string, body: Record<string, unknown
   try { return JSON.parse(texto) } catch { return null }
 }
 
+// confirmar-instalação espera form-data, não JSON — mesmo formato que a tela
+// de Recebimento usa (RecebimentoPage.confirmarInstalacao, chamarBubble(..., 'form'))
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function chamarBubbleServerForm(endpoint: string, body: Record<string, unknown>): Promise<any> {
+  const form = new FormData()
+  form.append('apikey', BUBBLE_KEY)
+  for (const [key, value] of Object.entries(body)) {
+    if (value !== undefined && value !== null) form.append(key, String(value))
+  }
+  const res = await fetch(`${BUBBLE_BASE}/${endpoint}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
+    body: form,
+  })
+  const texto = await res.text()
+  try { return JSON.parse(texto) } catch { return null }
+}
+
 const STATUS_COMPRA_RECEBIDA = 'COMPRA RECEBIDA'
+const STATUS_FILA_NOVO = 'NOVO'
 
 // POST /api/webhook-instalacao
 // Recebe { placa, nome } — a moto e o nome de quem confirmou a instalação.
-// Confere se a moto existe no Bubble, está com status COMPRA RECEBIDA e ainda
-// está pendente na fila de instalação (registro em "instalação 1" sem
-// confirmação em "instalação 3"). Só valida por enquanto — a ação a tomar
-// depois da validação ainda não foi definida.
+// Confere se a moto existe no Bubble, está com status COMPRA RECEBIDA e está
+// pendente na fila de instalação com status NOVO — e, se tudo bater, chama
+// confirmar-instalação (mesmo workflow que o botão "Confirmar Instalação" da
+// tela de Recebimento usa).
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   await logDebug({ origem: 'webhook-instalacao', etapa: 'recebido', body })
@@ -55,7 +74,8 @@ export async function POST(req: NextRequest) {
     // 1) Moto existe no Bubble?
     const dataVeiculo = await chamarBubbleServer('consulta-veiculo-funcoes', { placa })
     const veiculo = dataVeiculo?.response?.veiculo
-    if (!veiculo) {
+    // Placa inexistente vem como objeto vazio (sem _id), não como null
+    if (!veiculo?._id) {
       return responder({ valido: false, motivo: `moto com placa ${placa} não encontrada` }, 404)
     }
 
@@ -84,15 +104,41 @@ export async function POST(req: NextRequest) {
     if (!naFila2 || !registroFila1) {
       return responder({
         valido: false,
-        motivo: 'moto não está pendente na fila de instalação (aba Novo)',
+        motivo: 'moto não está na fila de instalação',
         veiculo: { _id: veiculo._id, placa, status_veiculo_desc: veiculo.status_veiculo_desc },
       })
     }
 
+    // 4) O registro da fila precisa estar com status NOVO (campo "status" do
+    // tipo lista-de-instalacao no Bubble)
+    if (registroFila1.status !== STATUS_FILA_NOVO) {
+      return responder({
+        valido: false,
+        motivo: `status da fila é "${registroFila1.status}", esperado "${STATUS_FILA_NOVO}"`,
+        veiculo: { _id: veiculo._id, placa, status_veiculo_desc: veiculo.status_veiculo_desc },
+        registroFila: { _id: registroFila1._id, status: registroFila1.status },
+      })
+    }
+
+    // 5) Tudo certo — confirma a instalação no Bubble
+    let confirmado = false
+    let erroConfirmacao: string | undefined
+    try {
+      const dataConfirmacao = await chamarBubbleServerForm('confirmar-instalação', {
+        'moto-instacao': registroFila1._id,
+        user: tecnico,
+      })
+      confirmado = dataConfirmacao?.status === 'success' || dataConfirmacao != null
+    } catch (err) {
+      erroConfirmacao = String(err)
+    }
+
     return responder({
       valido: true,
+      confirmado,
+      ...(erroConfirmacao ? { erroConfirmacao } : {}),
       veiculo: { _id: veiculo._id, placa, status_veiculo_desc: veiculo.status_veiculo_desc },
-      registroFila: { _id: registroFila1._id, data: registroFila1.data },
+      registroFila: { _id: registroFila1._id, data: registroFila1.data, status: registroFila1.status },
       tecnico,
     })
   } catch (err) {
