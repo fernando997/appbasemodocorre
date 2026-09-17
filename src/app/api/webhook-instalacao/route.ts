@@ -1,22 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { BUBBLE_BASE, BUBBLE_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
 
-// TESTE TEMPORÁRIO: manda as chamadas do webhook pra version-test do Bubble —
-// reverter (trocar por false) depois do teste.
-const VERSION_TEST = true
-
-function bubbleUrl(endpoint: string): string {
-  if (!VERSION_TEST) return `${BUBBLE_BASE}/${endpoint}`
-  const base = new URL(BUBBLE_BASE)
-  base.pathname = `/version-test${base.pathname}`
-  return `${base.toString().replace(/\/$/, '')}/${endpoint}`
-}
-
 // Chamada server-to-server direta ao Bubble (sem passar pelo proxy /api/bubble,
 // que é pra chamadas vindas do navegador) — mesmo padrão do api/rastreador/route.ts
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function chamarBubbleServer(endpoint: string, body: Record<string, unknown>): Promise<any> {
-  const res = await fetch(bubbleUrl(endpoint), {
+  const res = await fetch(`${BUBBLE_BASE}/${endpoint}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}`,
@@ -37,7 +26,7 @@ async function chamarBubbleServerForm(endpoint: string, body: Record<string, unk
   for (const [key, value] of Object.entries(body)) {
     if (value !== undefined && value !== null) form.append(key, String(value))
   }
-  const res = await fetch(bubbleUrl(endpoint), {
+  const res = await fetch(`${BUBBLE_BASE}/${endpoint}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${BUBBLE_PRIVATE_KEY}` },
     body: form,
