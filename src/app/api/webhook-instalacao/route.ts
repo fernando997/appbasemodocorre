@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { appendFile } from 'fs/promises'
-import path from 'path'
 import { BUBBLE_BASE, BUBBLE_KEY, BUBBLE_PRIVATE_KEY } from '@/lib/config'
-
-// TESTE TEMPORÁRIO: grava corpo recebido + resposta em debug.log, pra
-// inspecionar o que chega de verdade do provedor — reverter depois do teste.
-async function logDebug(dados: unknown) {
-  try {
-    const linha = `[${new Date().toISOString()}] ${JSON.stringify(dados)}\n`
-    await appendFile(path.join(process.cwd(), 'debug.log'), linha)
-  } catch {}
-}
 
 // Chamada server-to-server direta ao Bubble (sem passar pelo proxy /api/bubble,
 // que é pra chamadas vindas do navegador) — mesmo padrão do api/rastreador/route.ts
@@ -57,10 +46,8 @@ const STATUS_FILA_NOVO = 'NOVO'
 // tela de Recebimento usa).
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
-  await logDebug({ origem: 'webhook-instalacao', etapa: 'recebido', body })
 
-  async function responder(resultado: Record<string, unknown>, status = 200) {
-    await logDebug({ origem: 'webhook-instalacao', etapa: 'resposta', status, resultado })
+  function responder(resultado: Record<string, unknown>, status = 200) {
     return NextResponse.json(resultado, { status })
   }
 
