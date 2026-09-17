@@ -190,6 +190,7 @@ export default function RecebimentoPage() {
   const [dadosMoto, setDadosMoto] = useState<Record<string, unknown> | null>(null)
   const [pedidoData, setPedidoData] = useState<Record<string, unknown> | null>(null)
   const [erroChassi, setErroChassi] = useState<string | null>(null)
+  const [erroModotrack, setErroModotrack] = useState<string | null>(null)
   const [corSelecionada, setCorSelecionada] = useState('')
   const [confirmando, setConfirmando] = useState(false)
   const confirmandoRef = useRef(false)
@@ -311,7 +312,7 @@ export default function RecebimentoPage() {
   function fecharDialog() {
     if (confirmando || lendoPlaca) return
     setAtiva(null); setFoto(null); setFotoFile(null); setPlacaInput(''); setDadosMoto(null); setPedidoData(null); setErroChassi(null); setCorSelecionada('')
-    setUnidadeResolvida(null); setUnidadesCandidatas([]); setErroUnidade(null); setResultadoMotoBubble(null)
+    setUnidadeResolvida(null); setUnidadesCandidatas([]); setErroUnidade(null); setResultadoMotoBubble(null); setErroModotrack(null)
   }
 
   async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
@@ -611,8 +612,57 @@ export default function RecebimentoPage() {
     if (confirmandoRef.current) return
     confirmandoRef.current = true
     setConfirmando(true)
+    setErroModotrack(null)
     try {
-      // 1. upload da foto via API route (evita CORS)
+      const veiculo = (dadosMoto as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+      const veiculoDados = veiculo?.veiculo as Record<string, unknown> | undefined
+      const fipe = (veiculo?.fipes as Record<string, unknown>[] | undefined)?.[0]
+
+      // Marca/modelo separados — vêm prontos em data.fipes[0] (marca_modelo
+      // do próprio veículo vem tipo "Honda/cg 160 Start", sem separação real)
+      let marcaTrack = String(fipe?.marca ?? veiculoDados?.marca ?? '').trim()
+      let modeloTrack = String(fipe?.modelo ?? veiculoDados?.modelo ?? '').trim()
+      if (!marcaTrack && !modeloTrack) {
+        const marcaModelo = String(fipe?.marca_modelo ?? veiculoDados?.marca_modelo ?? '').trim()
+        const [primeira, ...resto] = marcaModelo.split(' ')
+        marcaTrack = primeira ?? ''
+        modeloTrack = resto.join(' ')
+      }
+
+      // Ano vem como "2026/2026" (ano modelo/ano fabricação) — usa só a
+      // primeira parte
+      const anoBruto = String(veiculoDados?.ano ?? '').split('/')[0]
+      const anoTrack = Number(anoBruto) || 0
+
+      const chassiMotoTrack = motos.find((m) => m._id === ativa)?.chassi ?? (resultadoMotoBubble?.veiculo.chassi as string | undefined) ?? ''
+
+      // 1. Cadastra na ModoTrack (veículo + ordem de serviço) ANTES de marcar
+      // como recebido no Bubble — se falhar, bloqueia o recebimento (upsert é
+      // idempotente, então tentar de novo depois não duplica nada)
+      const modotrackRes = await fetch('/api/modotrack-cadastrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unidadeNome: unidadeResolvida?.nome ?? '',
+          placa: placaInput.trim().toUpperCase(),
+          marca: marcaTrack,
+          modelo: modeloTrack,
+          ano: anoTrack,
+          cor: corSelecionada,
+          chassi: chassiMotoTrack,
+          // TODO: renavam — a FIPE por placa (placas.fipeapi.com.br) não devolve
+          // esse campo (confirmado na chamada real e na doc oficial deles) e o
+          // app não tem outra fonte hoje. Fica vazio até resolver de onde puxar.
+          renavam: '',
+        }),
+      })
+      const modotrackData = await modotrackRes.json().catch(() => null)
+      if (!modotrackRes.ok || !modotrackData?.ok) {
+        setErroModotrack(modotrackData?.motivo ?? `Falha ao cadastrar na ModoTrack (HTTP ${modotrackRes.status})`)
+        return
+      }
+
+      // 2. upload da foto via API route (evita CORS)
       const uploadForm = new FormData()
       uploadForm.append('foto', fotoFile, fotoFile.name)
       const uploadRes = await fetch('/api/upload-foto', { method: 'POST', body: uploadForm })
@@ -620,9 +670,7 @@ export default function RecebimentoPage() {
       if (!uploadRes.ok) throw new Error(`upload-foto HTTP ${uploadRes.status}`)
       const fotoUrl = uploadData.url as string
 
-      // 2. chamar o workflow com a URL da foto
-      const veiculo = (dadosMoto as Record<string, unknown>)?.data as Record<string, unknown> | undefined
-      const veiculoDados = veiculo?.veiculo as Record<string, unknown> | undefined
+      // 3. chamar o workflow com a URL da foto
       const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
 
       const receberBody: Record<string, unknown> = {
@@ -1121,6 +1169,11 @@ export default function RecebimentoPage() {
             {erroChassi && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
                 ⚠ {erroChassi}
+              </div>
+            )}
+            {erroModotrack && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                ⚠ Recebimento bloqueado — ModoTrack: {erroModotrack}
               </div>
             )}
             <div className="flex gap-3">
