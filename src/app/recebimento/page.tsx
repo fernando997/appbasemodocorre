@@ -212,6 +212,8 @@ export default function RecebimentoPage() {
   //  - outro: bloqueio genérico (comportamento antigo)
   const [modotrackTipo, setModotrackTipo] = useState<'placa_duplicada' | 'chassi_duplicado' | 'dados_faltando' | 'outro' | null>(null)
   const [modotrackCampos, setModotrackCampos] = useState<string[]>([])
+  // Confirmação extra antes de aceitar receber uma moto com placa já cadastrada na ModoTrack
+  const [confirmarContinuarPlaca, setConfirmarContinuarPlaca] = useState(false)
   const [corSelecionada, setCorSelecionada] = useState('')
   const [confirmando, setConfirmando] = useState(false)
   const confirmandoRef = useRef(false)
@@ -337,7 +339,7 @@ export default function RecebimentoPage() {
     if (confirmando || lendoPlaca) return
     setAtiva(null); setFoto(null); setFotoFile(null); setPlacaInput(''); setDadosMoto(null); setPedidoData(null); setErroChassi(null); setCorSelecionada('')
     setUnidadeResolvida(null); setUnidadesCandidatas([]); setErroUnidade(null); setResultadoMotoBubble(null); setErroModotrack(null)
-    setModotrackTipo(null); setModotrackCampos([])
+    setModotrackTipo(null); setModotrackCampos([]); setConfirmarContinuarPlaca(false)
   }
 
   async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
@@ -666,6 +668,7 @@ export default function RecebimentoPage() {
     setErroModotrack(null)
     setModotrackTipo(null)
     setModotrackCampos([])
+    setConfirmarContinuarPlaca(false)
     try {
       const veiculo = (dadosMoto as Record<string, unknown>)?.data as Record<string, unknown> | undefined
       const veiculoDados = veiculo?.veiculo as Record<string, unknown> | undefined
@@ -1260,28 +1263,41 @@ export default function RecebimentoPage() {
                 ⚠ {erroChassi}
               </div>
             )}
-            {/* Placa já cadastrada na ModoTrack — não bloqueia, deixa seguir sem gerar OS nova */}
-            {modotrackTipo === 'placa_duplicada' && (
+            {/* Placa já cadastrada na ModoTrack — não bloqueia, mas confirma antes de seguir sem gerar OS nova */}
+            {modotrackTipo === 'placa_duplicada' && !confirmarContinuarPlaca && (
               <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 space-y-2">
-                <p>⚠ Essa placa já está cadastrada na ModoTrack. {erroModotrack}</p>
-                <Button size="sm" variant="outline" className="w-full border-amber-300" onClick={continuarSemOrdemServico} disabled={confirmando}>
-                  {confirmando ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Continuando...</> : 'Continuar mesmo assim'}
+                <p>⚠ Essa moto já está cadastrada na ModoTrack.</p>
+                <Button size="sm" variant="outline" className="w-full border-amber-300" onClick={() => setConfirmarContinuarPlaca(true)} disabled={confirmando}>
+                  Continuar mesmo assim
                 </Button>
+              </div>
+            )}
+            {modotrackTipo === 'placa_duplicada' && confirmarContinuarPlaca && (
+              <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 space-y-2">
+                <p className="font-medium">Tem certeza que pode receber essa moto?</p>
+                <p className="text-xs text-amber-700/80">A placa já está cadastrada na ModoTrack — confirme antes de prosseguir.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => setConfirmarContinuarPlaca(false)} disabled={confirmando}>
+                    Cancelar
+                  </Button>
+                  <Button size="sm" className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={continuarSemOrdemServico} disabled={confirmando}>
+                    {confirmando ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Continuando...</> : 'Sim, tenho certeza'}
+                  </Button>
+                </div>
               </div>
             )}
 
             {/* Chassi já cadastrado em outro veículo — bloqueia de vez */}
             {modotrackTipo === 'chassi_duplicado' && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                ⚠ Esse chassi já está cadastrado em outro veículo na ModoTrack. {erroModotrack}
-                <br />Entre em contato com o suporte antes de continuar.
+                ⚠ Esse chassi já está cadastrado em outro veículo na ModoTrack. Entre em contato com o suporte antes de continuar.
               </div>
             )}
 
             {/* Dados obrigatórios faltando no cadastro do veículo */}
             {modotrackTipo === 'dados_faltando' && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                ⚠ Dados faltando para cadastrar na ModoTrack: {modotrackCampos.map((c) => CAMPO_MODOTRACK_LABEL[c] ?? c).join(', ') || erroModotrack}
+                ⚠ Estão faltando dados da moto para cadastrar na ModoTrack: {modotrackCampos.map((c) => CAMPO_MODOTRACK_LABEL[c] ?? c).join(', ') || erroModotrack}. Corrija e tente novamente.
               </div>
             )}
 
