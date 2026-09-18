@@ -94,6 +94,18 @@ export async function POST(req: NextRequest) {
       }),
     })
 
+    // Se o cadastro do veículo já falhou, não faz sentido esperar 10s e
+    // tentar gerar a ordem de serviço — vai falhar também (a ModoTrack não
+    // acha o veículo)
+    if (!veiculoRes.ok) {
+      return NextResponse.json({
+        ok: false,
+        motivo: `Falha ao cadastrar veículo na ModoTrack: ${veiculoRes.data?.detail ?? `HTTP ${veiculoRes.status}`}`,
+        clientId,
+        veiculo: { ok: veiculoRes.ok, status: veiculoRes.status, data: veiculoRes.data },
+      }, { status: 502 })
+    }
+
     await sleep(DELAY_PROCESSAMENTO_MS)
 
     const ordemRes = await chamarModotrack('/installer-orders/external/orders', {
@@ -113,8 +125,18 @@ export async function POST(req: NextRequest) {
       }),
     })
 
+    if (!ordemRes.ok) {
+      return NextResponse.json({
+        ok: false,
+        motivo: `Veículo cadastrado, mas falha ao gerar ordem de serviço: ${ordemRes.data?.detail ?? `HTTP ${ordemRes.status}`}`,
+        clientId,
+        veiculo: { ok: veiculoRes.ok, status: veiculoRes.status, data: veiculoRes.data },
+        ordem: { ok: ordemRes.ok, status: ordemRes.status, data: ordemRes.data },
+      }, { status: 502 })
+    }
+
     return NextResponse.json({
-      ok: veiculoRes.ok && ordemRes.ok,
+      ok: true,
       clientId,
       veiculo: { ok: veiculoRes.ok, status: veiculoRes.status, data: veiculoRes.data },
       ordem: { ok: ordemRes.ok, status: ordemRes.status, data: ordemRes.data },
