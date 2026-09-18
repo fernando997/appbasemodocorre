@@ -924,6 +924,9 @@ export default function MovimentacaoPage() {
       let registroTexto = registroSubRef.current
       if (registroTexto == null) {
         const registro = await registrarVistoriaSubstituicao(contratoId, placaNovaSub.trim().toUpperCase(), placa.trim().toUpperCase(), modo)
+        if (!registro) {
+          throw new Error('Não foi possível registrar a vistoria de substituição (resposta vazia). Tente novamente.')
+        }
         registroTexto = extrairMensagemRegistro(registro)
         registroSubRef.current = registroTexto
       }

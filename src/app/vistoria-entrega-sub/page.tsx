@@ -425,11 +425,19 @@ function VistoriaEntregaContent() {
       // primeira coisa que faz, antes de gerar PDF/subir arquivos, e garante
       // que o envio final só acontece depois dessa checagem responder
       setEnvioStatus('registro')
-      const registro = await chamarBubble('base-registro-vistoria-substituicao', {
-        contrato: contratoId ?? '',
-        'placa-nova': placa!.trim().toUpperCase(),
-        'placa-antiga': (placaContrato ?? '').trim().toUpperCase(),
-      }).catch(() => null)
+      let registro: unknown
+      try {
+        registro = await chamarBubble('base-registro-vistoria-substituicao', {
+          contrato: contratoId ?? '',
+          'placa-nova': placa!.trim().toUpperCase(),
+          'placa-antiga': (placaContrato ?? '').trim().toUpperCase(),
+        })
+      } catch (err) {
+        throw new Error(`Erro ao registrar vistoria de substituição: ${String(err)}`)
+      }
+      if (!registro) {
+        throw new Error('Não foi possível registrar a vistoria de substituição (resposta vazia). Tente novamente.')
+      }
       const registroTexto = extrairMensagemRegistro(registro)
       setMensagemRegistroSub(mensagemAmigavelRegistro(registroTexto))
 
