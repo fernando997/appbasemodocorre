@@ -79,6 +79,20 @@ function moeda(valor: number) {
 
 const selectClass = 'w-full px-2 py-1.5 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-blue-600/30'
 
+// Nomes amigáveis dos campos que a ModoTrack pode reclamar em "fields" (erro
+// VEHICLE_INVALID_FIELDS)
+const CAMPO_MODOTRACK_LABEL: Record<string, string> = {
+  plate: 'Placa',
+  name: 'Placa',
+  brand: 'Marca',
+  model: 'Modelo',
+  year: 'Ano',
+  color: 'Cor',
+  chassis: 'Chassi',
+  renavam: 'Renavam',
+  client_id: 'Unidade',
+}
+
 export default function RecebimentoPage() {
   const [motos, setMotos] = useState<MotoAPI[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -191,6 +205,13 @@ export default function RecebimentoPage() {
   const [pedidoData, setPedidoData] = useState<Record<string, unknown> | null>(null)
   const [erroChassi, setErroChassi] = useState<string | null>(null)
   const [erroModotrack, setErroModotrack] = useState<string | null>(null)
+  // Tipo da falha na ModoTrack — muda o que aparece no dialog:
+  //  - placa_duplicada: mostra botão "Continuar mesmo assim"
+  //  - chassi_duplicado: bloqueia total, manda contatar o suporte
+  //  - dados_faltando: mostra quais campos estão faltando
+  //  - outro: bloqueio genérico (comportamento antigo)
+  const [modotrackTipo, setModotrackTipo] = useState<'placa_duplicada' | 'chassi_duplicado' | 'dados_faltando' | 'outro' | null>(null)
+  const [modotrackCampos, setModotrackCampos] = useState<string[]>([])
   const [corSelecionada, setCorSelecionada] = useState('')
   const [confirmando, setConfirmando] = useState(false)
   const confirmandoRef = useRef(false)
@@ -229,6 +250,9 @@ export default function RecebimentoPage() {
   // Coordenada que o GPS devolveu — mostrada como link no erro de "fora do raio",
   // pra conferir visualmente se é mesmo a posição real do operador
   const [coordenadaObtida, setCoordenadaObtida] = useState<{ lat: number; lng: number } | null>(null)
+  // RAFAEL VULCANO escolhe a unidade manualmente, sem depender do GPS — usado
+  // pra testar recebimento em unidades onde ele não está fisicamente
+  const [escolhaManualUnidade, setEscolhaManualUnidade] = useState(false)
 
   const [pedidosMap, setPedidosMap] = useState<Record<string, number>>({})
   const [locadorasMap, setLocadorasMap] = useState<Record<string, string>>({})
@@ -313,6 +337,7 @@ export default function RecebimentoPage() {
     if (confirmando || lendoPlaca) return
     setAtiva(null); setFoto(null); setFotoFile(null); setPlacaInput(''); setDadosMoto(null); setPedidoData(null); setErroChassi(null); setCorSelecionada('')
     setUnidadeResolvida(null); setUnidadesCandidatas([]); setErroUnidade(null); setResultadoMotoBubble(null); setErroModotrack(null)
+    setModotrackTipo(null); setModotrackCampos([])
   }
 
   async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
@@ -382,6 +407,32 @@ export default function RecebimentoPage() {
     setUnidadesCandidatas([])
     setErroUnidade(null)
     setCoordenadaObtida(null)
+    setEscolhaManualUnidade(false)
+
+    // RAFAEL VULCANO escolhe a unidade manualmente, sem depender do GPS
+    const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
+    const nomeUsuario = String(user?.Nome ?? user?.nome ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().trim()
+    if (nomeUsuario === 'RAFAEL VULCANO') {
+      let unidadesDoUsuario: { _id: string; 'Nome Unidade': string }[] = []
+      try {
+        unidadesDoUsuario = JSON.parse(localStorage.getItem('mc_unidades') ?? '[]')
+      } catch {}
+      if (unidadesDoUsuario.length === 0) {
+        setErroUnidade('Nenhuma unidade vinculada a esse usuário.')
+        setResolvendoUnidade(false)
+        return
+      }
+      setEscolhaManualUnidade(true)
+      const candidatas: UnidadeLocalizada[] = unidadesDoUsuario.map((u) => ({ id: u._id, nome: u['Nome Unidade'], distanciaMetros: 0 }))
+      if (candidatas.length === 1) {
+        setUnidadeResolvida(candidatas[0])
+      } else {
+        setUnidadesCandidatas(candidatas)
+      }
+      setResolvendoUnidade(false)
+      return
+    }
+
     try {
       // O navegador só expõe geolocalização em contexto seguro (https ou localhost).
       // Acessando por IP em http o GPS pode estar ligado e mesmo assim falhar aqui.
@@ -613,6 +664,8 @@ export default function RecebimentoPage() {
     confirmandoRef.current = true
     setConfirmando(true)
     setErroModotrack(null)
+    setModotrackTipo(null)
+    setModotrackCampos([])
     try {
       const veiculo = (dadosMoto as Record<string, unknown>)?.data as Record<string, unknown> | undefined
       const veiculoDados = veiculo?.veiculo as Record<string, unknown> | undefined
@@ -636,9 +689,10 @@ export default function RecebimentoPage() {
 
       const chassiMotoTrack = motos.find((m) => m._id === ativa)?.chassi ?? (resultadoMotoBubble?.veiculo.chassi as string | undefined) ?? ''
 
-      // 1. Cadastra na ModoTrack (veículo + ordem de serviço) ANTES de marcar
+      // Cadastra na ModoTrack (veículo + ordem de serviço) ANTES de marcar
       // como recebido no Bubble — se falhar, bloqueia o recebimento (upsert é
-      // idempotente, então tentar de novo depois não duplica nada)
+      // idempotente, então tentar de novo depois não duplica nada), exceto no
+      // caso "placa_duplicada" (moto já existe lá, deixa continuar)
       const modotrackRes = await fetch('/api/modotrack-cadastrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -650,19 +704,54 @@ export default function RecebimentoPage() {
           ano: anoTrack,
           cor: corSelecionada,
           chassi: chassiMotoTrack,
-          // TODO: renavam — a FIPE por placa (placas.fipeapi.com.br) não devolve
-          // esse campo (confirmado na chamada real e na doc oficial deles) e o
-          // app não tem outra fonte hoje. Fica vazio até resolver de onde puxar.
+          // Confirmado que a ModoTrack aceita renavam vazio (não é
+          // obrigatório de verdade, apesar da doc dizer que é) — a FIPE por
+          // placa não traz esse dado de qualquer forma
           renavam: '',
         }),
       })
       const modotrackData = await modotrackRes.json().catch(() => null)
       if (!modotrackRes.ok || !modotrackData?.ok) {
         setErroModotrack(modotrackData?.motivo ?? `Falha ao cadastrar na ModoTrack (HTTP ${modotrackRes.status})`)
+        setModotrackTipo(modotrackData?.tipo ?? 'outro')
+        setModotrackCampos(modotrackData?.campos ?? [])
+        confirmandoRef.current = false
+        setConfirmando(false)
         return
       }
 
-      // 2. upload da foto via API route (evita CORS)
+      await finalizarRecebimentoNoBubble()
+    } catch {
+      confirmandoRef.current = false
+      setConfirmando(false)
+    }
+  }
+
+  // "Continuar mesmo assim" — só liberado quando a ModoTrack disse que a
+  // placa já está cadastrada (moto já existe lá, não precisa gerar OS de novo)
+  async function continuarSemOrdemServico() {
+    if (confirmandoRef.current) return
+    confirmandoRef.current = true
+    setConfirmando(true)
+    setErroModotrack(null)
+    setModotrackTipo(null)
+    setModotrackCampos([])
+    await finalizarRecebimentoNoBubble()
+  }
+
+  // Depois que a ModoTrack confirmou (ou foi liberado seguir mesmo sem ela,
+  // no caso de placa já cadastrada) — sobe a foto e grava o recebimento no Bubble
+  async function finalizarRecebimentoNoBubble() {
+    if (!fotoFile || !foto) {
+      confirmandoRef.current = false
+      setConfirmando(false)
+      return
+    }
+    try {
+      const veiculo = (dadosMoto as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+      const veiculoDados = veiculo?.veiculo as Record<string, unknown> | undefined
+
+      // upload da foto via API route (evita CORS)
       const uploadForm = new FormData()
       uploadForm.append('foto', fotoFile, fotoFile.name)
       const uploadRes = await fetch('/api/upload-foto', { method: 'POST', body: uploadForm })
@@ -1171,7 +1260,33 @@ export default function RecebimentoPage() {
                 ⚠ {erroChassi}
               </div>
             )}
-            {erroModotrack && (
+            {/* Placa já cadastrada na ModoTrack — não bloqueia, deixa seguir sem gerar OS nova */}
+            {modotrackTipo === 'placa_duplicada' && (
+              <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 space-y-2">
+                <p>⚠ Essa placa já está cadastrada na ModoTrack. {erroModotrack}</p>
+                <Button size="sm" variant="outline" className="w-full border-amber-300" onClick={continuarSemOrdemServico} disabled={confirmando}>
+                  {confirmando ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Continuando...</> : 'Continuar mesmo assim'}
+                </Button>
+              </div>
+            )}
+
+            {/* Chassi já cadastrado em outro veículo — bloqueia de vez */}
+            {modotrackTipo === 'chassi_duplicado' && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                ⚠ Esse chassi já está cadastrado em outro veículo na ModoTrack. {erroModotrack}
+                <br />Entre em contato com o suporte antes de continuar.
+              </div>
+            )}
+
+            {/* Dados obrigatórios faltando no cadastro do veículo */}
+            {modotrackTipo === 'dados_faltando' && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                ⚠ Dados faltando para cadastrar na ModoTrack: {modotrackCampos.map((c) => CAMPO_MODOTRACK_LABEL[c] ?? c).join(', ') || erroModotrack}
+              </div>
+            )}
+
+            {/* Qualquer outra falha — bloqueio genérico */}
+            {modotrackTipo === 'outro' && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
                 ⚠ Recebimento bloqueado — ModoTrack: {erroModotrack}
               </div>
@@ -1225,11 +1340,12 @@ export default function RecebimentoPage() {
               </div>
             )}
 
-            {/* Mais de uma unidade na mesma localização — operador escolhe qual */}
+            {/* Mais de uma unidade na mesma localização — operador escolhe qual
+                (ou escolha manual, sem GPS, liberada só pro RAFAEL VULCANO) */}
             {!resolvendoUnidade && !erroUnidade && !unidadeResolvida && unidadesCandidatas.length > 1 && (
               <div className="space-y-3 py-2">
                 <div className="text-center">
-                  <p className="text-sm font-semibold">Mais de uma unidade aqui</p>
+                  <p className="text-sm font-semibold">{escolhaManualUnidade ? 'Escolha a unidade' : 'Mais de uma unidade aqui'}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Selecione em qual unidade você está recebendo a moto.
                   </p>
@@ -1242,7 +1358,9 @@ export default function RecebimentoPage() {
                       className="w-full flex items-center justify-between gap-3 px-4 py-3 border rounded-lg text-left hover:border-blue-400 hover:bg-blue-50 transition-colors"
                     >
                       <span className="text-sm font-medium">{u.nome}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{Math.round(u.distanciaMetros)}m</span>
+                      {!escolhaManualUnidade && (
+                        <span className="text-xs text-muted-foreground shrink-0">{Math.round(u.distanciaMetros)}m</span>
+                      )}
                     </button>
                   ))}
                 </div>
