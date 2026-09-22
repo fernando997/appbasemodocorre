@@ -424,6 +424,11 @@ export default function MovimentacaoPage() {
   const [combustivelDisponibilidade, setCombustivelDisponibilidade] = useState('')
   const [videoDisponibilidade, setVideoDisponibilidade] = useState<string | null>(null)
   const [videoDisponibilidadeFile, setVideoDisponibilidadeFile] = useState<File | null>(null)
+  // "Solicitar Manutenção no Rastreamento" — quando a vistoria de
+  // disponibilidade é bloqueada por rastreador sem sinal
+  const [solicitandoManutencaoRastreador, setSolicitandoManutencaoRastreador] = useState(false)
+  const [erroManutencaoRastreador, setErroManutencaoRastreador] = useState<string | null>(null)
+  const [manutencaoRastreadorSolicitada, setManutencaoRastreadorSolicitada] = useState(false)
   const [enviandoVistoria, setEnviandoVistoria] = useState(false)
   const [etapaEnvio, setEtapaEnvio] = useState<'upload' | 'registro' | 'vistoria' | 'concluido' | null>(null)
   const [mensagemRegistroSub, setMensagemRegistroSub] = useState<string | null>(null)
@@ -741,6 +746,8 @@ export default function MovimentacaoPage() {
     setTestandoRastreador(true)
     setRastreadorInfo(null)
     setEnderecosRastreador({})
+    setErroManutencaoRastreador(null)
+    setManutencaoRastreadorSolicitada(false)
     try {
       const res = await fetch('/api/rastreador', {
         method: 'POST',
@@ -767,6 +774,59 @@ export default function MovimentacaoPage() {
       setRastreadorInfo({ ok: false, localizacoes: {} })
     } finally {
       setTestandoRastreador(false)
+    }
+  }
+
+  // "Solicitar Manutenção no Rastreamento" — botão que aparece quando a
+  // vistoria de disponibilidade é bloqueada por rastreador sem sinal. Confere
+  // primeiro se a moto está cadastrada na ModoTrack, depois abre a
+  // solicitação no Bubble (a aprovação, mudança de status e criação da OS de
+  // manutenção na ModoTrack acontecem do lado do Bubble, não aqui)
+  async function solicitarManutencaoRastreador() {
+    if (!placa) return
+    setSolicitandoManutencaoRastreador(true)
+    setErroManutencaoRastreador(null)
+    try {
+      const verifRes = await fetch('/api/modotrack-verificar-placa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placa: placa.trim().toUpperCase() }),
+      })
+      const verifData = await verifRes.json().catch(() => null)
+      if (!verifData?.cadastrada) {
+        setErroManutencaoRastreador('Essa placa não se encontra migrada para a modo track, informe a equipe operacional.')
+        return
+      }
+      if (verifData.ordemAberta) {
+        setErroManutencaoRastreador('Já existe uma ordem de serviço de manutenção em aberto para esta moto na ModoTrack.')
+        return
+      }
+
+      const veiculoId = (veiculoFuncoes as { _id?: string } | null)?._id ?? ''
+      const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
+      const kmAtual = veiculoFuncoes?.km != null ? String(veiculoFuncoes.km) : undefined
+
+      const data = await chamarBubble('registrar-solicitacao-base', {
+        data: String(Date.now()),
+        veiculo: veiculoId,
+        descricao: 'MANUTENÇÃO DE RASTREADOR',
+        tipo: 'MANUTENÇÃO',
+        motivo: 'Solicitado via app da base no momento da vistoria de disponibilidade',
+        user: user?._id ?? '',
+        ...(kmAtual ? { km: kmAtual } : {}),
+      })
+
+      const mensagemBloqueio = data?.response?.MENSAGEM ?? data?.MENSAGEM
+      if (mensagemBloqueio) {
+        setErroManutencaoRastreador(String(mensagemBloqueio))
+        return
+      }
+
+      setManutencaoRastreadorSolicitada(true)
+    } catch (err) {
+      setErroManutencaoRastreador(`Erro ao solicitar manutenção: ${String(err)}`)
+    } finally {
+      setSolicitandoManutencaoRastreador(false)
     }
   }
 
@@ -2169,6 +2229,29 @@ export default function MovimentacaoPage() {
                     <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100 mt-1" onClick={() => testarRastreador(placa)}>
                       <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                     </Button>
+
+                    {manutencaoRastreadorSolicitada ? (
+                      <div className="w-full flex items-center gap-2 justify-center text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-1">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        Manutenção solicitada com sucesso.
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-100 mt-1"
+                        onClick={solicitarManutencaoRastreador}
+                        disabled={solicitandoManutencaoRastreador}
+                      >
+                        {solicitandoManutencaoRastreador
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <AlertTriangle className="w-3.5 h-3.5" />}
+                        Solicitar Manutenção no Rastreamento
+                      </Button>
+                    )}
+                    {erroManutencaoRastreador && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 w-full">{erroManutencaoRastreador}</p>
+                    )}
                   </div>
                 </div>
               )}
