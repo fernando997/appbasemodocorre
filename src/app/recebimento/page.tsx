@@ -542,7 +542,10 @@ export default function RecebimentoPage() {
     setPedidoData(null)
     setLendoPlaca(false)
     setErroChassi(null)
-    setCorSelecionada('')
+    // Cor não é mais escolhida manualmente — vem direto da FIPE (mesmo campo
+    // já exibido em "Dados do Veículo")
+    const veiculoFipe = (dadosMotoData as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+    setCorSelecionada(String((veiculoFipe?.veiculo as Record<string, unknown> | undefined)?.cor ?? ''))
     if (veiculo.processo === 'NOVO' && veiculo.pedido_compra) {
       const numeroPedido = pedidosMap[veiculo.pedido_compra as string]
       if (numeroPedido != null) consultarPedido(numeroPedido)
@@ -1195,30 +1198,6 @@ export default function RecebimentoPage() {
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
                 )}
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Cor da moto <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={corSelecionada}
-                onChange={(e) => setCorSelecionada(e.target.value)}
-                disabled={confirmando}
-                className={`w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-blue-600/30 disabled:opacity-50 ${!corSelecionada ? 'text-muted-foreground' : ''}`}
-              >
-                <option value="">Selecione a cor...</option>
-                <option>Preta</option>
-                <option>Branca</option>
-                <option>Vermelha</option>
-                <option>Azul</option>
-                <option>Cinza</option>
-                <option>Prata</option>
-                <option>Verde</option>
-                <option>Amarela</option>
-                <option>Laranja</option>
-                <option>Marrom</option>
-              </select>
             </div>
 
             {dadosMoto && !lendoPlaca && (() => {
