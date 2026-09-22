@@ -1,29 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+const MODOTRACK_ORDERS_URL = 'https://app.modotrack.com.br/api/v1/installer-orders/external/orders'
+
 // POST /api/modotrack-criar-os-manutencao
 // Chamado pelo Bubble depois que a solicitação de "MANUTENÇÃO DE RASTREADOR"
 // (registrar-solicitacao-base) é aprovada — cria a ordem de serviço de
 // manutenção na ModoTrack (service_type: MAINTENANCE).
-//
-// TODO: ainda NÃO faz a chamada de verdade pra ModoTrack — só devolve uma
-// resposta fixa, pra o Bubble conseguir inicializar essa API externa no API
-// Connector sem criar uma ordem de serviço real. Preencher com o POST real
-// (installer-orders/external/orders) só depois que o Bubble já estiver
-// configurado contra essa resposta de exemplo.
+// Sempre responde HTTP 200 — o campo "ok" (true/false) que diz se deu certo,
+// senão o Bubble trata qualquer status != 200 como falha de chamada e não
+// consegue ler o motivo do erro normalmente
 export async function POST(req: NextRequest) {
   const chaveRecebida = req.headers.get('X-API-Key')
   if (!chaveRecebida || chaveRecebida !== process.env.APP_API_KEY) {
-    return NextResponse.json({ ok: false, motivo: 'API Key inválida' }, { status: 401 })
+    return NextResponse.json({ ok: false, motivo: 'API Key inválida' })
   }
 
   const body = await req.json().catch(() => null)
   const placa = String(body?.placa ?? '').trim().toUpperCase()
+  if (!placa) {
+    return NextResponse.json({ ok: false, motivo: 'placa não informada' })
+  }
 
-  return NextResponse.json({
-    ok: true,
-    mock: true,
-    placa,
-    orderId: 0,
-    externalId: '',
-  })
+  try {
+    const res = await fetch(MODOTRACK_ORDERS_URL, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.MODOTRACK_INSTALLER_KEY!,
+      },
+      // Sem external_id — deixa a ModoTrack gerar um número único (evita 409
+      // se essa placa já tiver uma OS com external_id repetido, ex: a de
+      // instalação que usa a placa como external_id)
+      body: JSON.stringify({
+        service_type: 'MAINTENANCE',
+        plate: placa,
+        blocker_type_id: null,
+        requires_blocker: true,
+        defer_blocker_selection: true,
+        requires_primary: true,
+        requires_backup: true,
+        requires_citytag: true,
+        source_system: 'MODO CORRE',
+        notes: 'VISTORIA DE DISPONIBILIDADE NEGADA - Manutenção solicitada pelo app da base no momento da vistoria de DISPONÍBILIDADE',
+      }),
+    })
+    const texto = await res.text()
+    let data: unknown = null
+    try { data = JSON.parse(texto) } catch { data = null }
+
+    if (!res.ok) {
+      const detail = (data as { detail?: unknown } | null)?.detail
+      const motivo = typeof detail === 'object' && detail
+        ? String((detail as Record<string, unknown>).message ?? JSON.stringify(detail))
+        : String(detail ?? `HTTP ${res.status}`)
+      return NextResponse.json({ ok: false, motivo, status: res.status })
+    }
+
+    const ordem = data as { id?: number; external_id?: string; status?: string } | null
+    return NextResponse.json({
+      ok: true,
+      placa,
+      orderId: ordem?.id ?? 0,
+      externalId: ordem?.external_id ?? '',
+      status: ordem?.status ?? '',
+    })
+  } catch (err) {
+    return NextResponse.json({ ok: false, motivo: String(err) })
+  }
 }
