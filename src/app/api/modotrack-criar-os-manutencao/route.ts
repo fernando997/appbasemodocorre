@@ -10,15 +10,19 @@ const MODOTRACK_ORDERS_URL = 'https://app.modotrack.com.br/api/v1/installer-orde
 // senão o Bubble trata qualquer status != 200 como falha de chamada e não
 // consegue ler o motivo do erro normalmente
 export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => null)
+  // Sempre inclui "placa" na resposta (mesmo vazia), pra ficar visível no
+  // retorno do Bubble o que de fato chegou nessa chamada — ajuda a
+  // diagnosticar se o problema é no envio (placa vazia aqui) ou depois
+  const placa = String(body?.placa ?? '').trim().toUpperCase()
+
   const chaveRecebida = req.headers.get('X-API-Key')
   if (!chaveRecebida || chaveRecebida !== process.env.APP_API_KEY) {
-    return NextResponse.json({ ok: false, motivo: 'API Key inválida' })
+    return NextResponse.json({ ok: false, motivo: 'API Key inválida', placa })
   }
 
-  const body = await req.json().catch(() => null)
-  const placa = String(body?.placa ?? '').trim().toUpperCase()
   if (!placa) {
-    return NextResponse.json({ ok: false, motivo: 'placa não informada' })
+    return NextResponse.json({ ok: false, motivo: 'placa não informada', placa })
   }
 
   try {
@@ -54,7 +58,7 @@ export async function POST(req: NextRequest) {
       const motivo = typeof detail === 'object' && detail
         ? String((detail as Record<string, unknown>).message ?? JSON.stringify(detail))
         : String(detail ?? `HTTP ${res.status}`)
-      return NextResponse.json({ ok: false, motivo, status: res.status })
+      return NextResponse.json({ ok: false, motivo, status: res.status, placa })
     }
 
     const ordem = data as { id?: number; external_id?: string; status?: string } | null
@@ -66,6 +70,6 @@ export async function POST(req: NextRequest) {
       status: ordem?.status ?? '',
     })
   } catch (err) {
-    return NextResponse.json({ ok: false, motivo: String(err) })
+    return NextResponse.json({ ok: false, motivo: String(err), placa })
   }
 }

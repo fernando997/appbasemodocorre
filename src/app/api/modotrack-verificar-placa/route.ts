@@ -30,11 +30,12 @@ export async function POST(req: NextRequest) {
     if (!posRes.ok) {
       const codigo = (posData as { code?: string } | null)?.code
       if (codigo === 'NOT_FOUND') {
-        return NextResponse.json({ cadastrada: false })
+        return NextResponse.json({ cadastrada: false, placa })
       }
       return NextResponse.json({
         cadastrada: false,
         motivo: (posData as { detail?: string } | null)?.detail ?? `HTTP ${posRes.status}`,
+        placa,
       }, { status: 502 })
     }
 
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
-    return NextResponse.json({ cadastrada: true, ordemAberta, dados: posData })
+    return NextResponse.json({ cadastrada: true, ordemAberta, placa, dados: posData })
   } catch (err) {
     return NextResponse.json({ cadastrada: false, motivo: String(err) }, { status: 500 })
   }
