@@ -38,8 +38,9 @@ export async function POST(req: NextRequest) {
       }, { status: 502 })
     }
 
-    // 2) Já existe ordem de manutenção aberta? Se essa consulta falhar, não
-    // bloqueia o fluxo — só não conseguimos confirmar (ordemAberta fica false)
+    // 2) Já existe ordem de manutenção aberta? (confirmado funcionando com
+    // MODOTRACK_INSTALLER_KEY) — se essa consulta falhar mesmo assim, não
+    // bloqueia o fluxo, só não conseguimos confirmar (ordemAberta fica false)
     let ordemAberta = false
     try {
       const ordensUrl = `${MODOTRACK_BASE}/installer-orders/orders`
