@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Bike } from 'lucide-react'
+import { Bike, RefreshCw } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
 
@@ -53,6 +53,7 @@ type Veiculo = {
 export default function DashboardPage() {
   const [veiculos, setVeiculos] = useState<Veiculo[]>([])
   const [carregando, setCarregando] = useState(false)
+  const [atualizando, setAtualizando] = useState(false)
   const [dadosRecolhas, setDadosRecolhas] = useState<unknown>(null)
   const [totalCarregado, setTotalCarregado] = useState(0)
   const [fraseIndex, setFraseIndex] = useState(0)
@@ -65,99 +66,111 @@ export default function DashboardPage() {
     return () => clearInterval(id)
   }, [carregando])
 
+  const buscarVeiculos = useCallback(async () => {
+    setCarregando(true)
+    try {
+      const ids = getUnidadesAtivas()
+      const vistos = new Set<string>()
+      const todos: Veiculo[] = []
+      const TAMANHO = 50
+      let minimo = 1
+
+      while (true) {
+        const maximo = minimo + TAMANHO - 1
+        const data = await chamarBubble('chamar-veiculos', {
+          unidade: JSON.stringify(ids),
+          minimo: String(minimo),
+          maximo: String(maximo),
+        })
+        const batch: Veiculo[] = data?.response?.veiculos ?? []
+        if (batch.length === 0) break
+        for (const v of batch) {
+          if (!vistos.has(v._id as string)) {
+            vistos.add(v._id as string)
+            todos.push(v)
+          }
+        }
+        setTotalCarregado(todos.length)
+        minimo += TAMANHO
+        await sleep(INTERVALO_PAGINACAO_MS)
+      }
+
+      localStorage.setItem('mc_veiculos', JSON.stringify(todos))
+      setVeiculos(todos)
+    } catch {
+      setVeiculos([])
+    } finally {
+      setCarregando(false)
+    }
+  }, [])
+
+  const buscarRecolhas = useCallback(async () => {
+    try {
+      const ids = getUnidadesAtivas()
+      const TAMANHO = 50
+      let minimo = 1
+      const todasRecolhas: unknown[] = []
+      const todasPendencias: unknown[] = []
+      const vistosR = new Set<string>()
+      const vistosP = new Set<string>()
+
+      let pendenciasCarregadas = false
+
+      while (true) {
+        const maximo = minimo + TAMANHO - 1
+        const data = await chamarBubble('chamar-recolhas-pendencias', {
+          unidade: JSON.stringify(ids),
+          minimo: String(minimo),
+          maximo: String(maximo),
+        })
+        const batchR: { _id?: string }[] = data?.response?.recolha ?? []
+        const batchP: { _id?: string }[] = data?.response?.pendencias ?? []
+
+        for (const r of batchR) {
+          if (r._id && !vistosR.has(r._id)) { vistosR.add(r._id); todasRecolhas.push(r) }
+        }
+
+        if (!pendenciasCarregadas) {
+          for (const p of batchP) {
+            if (p._id && !vistosP.has(p._id)) { vistosP.add(p._id); todasPendencias.push(p) }
+          }
+          pendenciasCarregadas = true
+        }
+
+        if (batchR.length === 0) break
+        minimo += TAMANHO
+        await sleep(INTERVALO_PAGINACAO_MS)
+      }
+
+      setDadosRecolhas({ response: { recolha: todasRecolhas, pendencias: todasPendencias } })
+    } catch {
+    }
+  }, [])
+
   useEffect(() => {
     const cache = localStorage.getItem('mc_veiculos')
     if (cache) {
       try { setVeiculos(JSON.parse(cache)) } catch {}
       return
     }
-
-    async function buscar() {
-      setCarregando(true)
-      try {
-        const ids = getUnidadesAtivas()
-        const vistos = new Set<string>()
-        const todos: Veiculo[] = []
-        const TAMANHO = 50
-        let minimo = 1
-
-        while (true) {
-          const maximo = minimo + TAMANHO - 1
-          const data = await chamarBubble('chamar-veiculos', {
-            unidade: JSON.stringify(ids),
-            minimo: String(minimo),
-            maximo: String(maximo),
-          })
-          const batch: Veiculo[] = data?.response?.veiculos ?? []
-          if (batch.length === 0) break
-          for (const v of batch) {
-            if (!vistos.has(v._id as string)) {
-              vistos.add(v._id as string)
-              todos.push(v)
-            }
-          }
-          setTotalCarregado(todos.length)
-          minimo += TAMANHO
-          await sleep(INTERVALO_PAGINACAO_MS)
-        }
-
-        localStorage.setItem('mc_veiculos', JSON.stringify(todos))
-        setVeiculos(todos)
-      } catch {
-        setVeiculos([])
-      } finally {
-        setCarregando(false)
-      }
-    }
-
-    buscar()
-  }, [])
+    buscarVeiculos()
+  }, [buscarVeiculos])
 
   useEffect(() => {
-    async function buscarRecolhas() {
-      try {
-        const ids = getUnidadesAtivas()
-        const TAMANHO = 50
-        let minimo = 1
-        const todasRecolhas: unknown[] = []
-        const todasPendencias: unknown[] = []
-        const vistosR = new Set<string>()
-        const vistosP = new Set<string>()
-
-        let pendenciasCarregadas = false
-
-        while (true) {
-          const maximo = minimo + TAMANHO - 1
-          const data = await chamarBubble('chamar-recolhas-pendencias', {
-            unidade: JSON.stringify(ids),
-            minimo: String(minimo),
-            maximo: String(maximo),
-          })
-          const batchR: { _id?: string }[] = data?.response?.recolha ?? []
-          const batchP: { _id?: string }[] = data?.response?.pendencias ?? []
-
-          for (const r of batchR) {
-            if (r._id && !vistosR.has(r._id)) { vistosR.add(r._id); todasRecolhas.push(r) }
-          }
-
-          if (!pendenciasCarregadas) {
-            for (const p of batchP) {
-              if (p._id && !vistosP.has(p._id)) { vistosP.add(p._id); todasPendencias.push(p) }
-            }
-            pendenciasCarregadas = true
-          }
-
-          if (batchR.length === 0) break
-          minimo += TAMANHO
-          await sleep(INTERVALO_PAGINACAO_MS)
-        }
-
-        setDadosRecolhas({ response: { recolha: todasRecolhas, pendencias: todasPendencias } })
-      } catch {
-      }
-    }
     buscarRecolhas()
-  }, [])
+  }, [buscarRecolhas])
+
+  const handleAtualizar = useCallback(async () => {
+    if (atualizando) return
+    setAtualizando(true)
+    setTotalCarregado(0)
+    localStorage.removeItem('mc_veiculos')
+    try {
+      await Promise.all([buscarVeiculos(), buscarRecolhas()])
+    } finally {
+      setAtualizando(false)
+    }
+  }, [atualizando, buscarVeiculos, buscarRecolhas])
 
   const total = veiculos.length
   const atencao = veiculos.filter((v) => STATUS_ATENCAO.includes(v.status_veiculo_desc)).length
@@ -210,6 +223,14 @@ export default function DashboardPage() {
             <p className="text-[#6C63FF] text-xs">Atenção</p>
             <p className="font-bold text-base leading-tight text-[#6C63FF]">{atencao}</p>
           </div>
+          <button
+            onClick={handleAtualizar}
+            disabled={atualizando}
+            title="Atualizar frota"
+            className="bg-white rounded-xl px-3 py-1.5 shadow-[0_2px_12px_rgba(99,102,241,0.08)] disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 text-[#1B2043] ${atualizando ? 'animate-spin' : ''}`} />
+          </button>
         </>
       }
     />
