@@ -12,11 +12,11 @@ import { GravadorVideo } from '@/components/gravador-video'
 
 // Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function chamarBubble(endpoint: string, body: Record<string, unknown>, format?: 'json' | 'form'): Promise<any> {
+async function chamarBubble(endpoint: string, body: Record<string, unknown>, format?: 'json' | 'form', versionTest?: boolean): Promise<any> {
   const res = await fetch('/api/bubble', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint, body, format }),
+    body: JSON.stringify({ endpoint, body, format, versionTest }),
   })
   const text = await res.text()
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${text}`)
@@ -411,6 +411,16 @@ export default function MovimentacaoPage() {
   const clienteInfo = veiculoFuncoes?.cliente as { nome_completo?: string; celular?: string } | undefined
   const [pendenciasVeiculo, setPendenciasVeiculo] = useState<Record<string, unknown>[]>([])
   const pendenciasAtivas = pendenciasVeiculo.filter((p) => p.status === 'ATIVO')
+  // Previsão de recolha em aberto — bloqueia todas as outras ações até o
+  // usuário confirmar a recolha ou manter a moto com o cliente
+  const [previsaoRecolha, setPrevisaoRecolha] = useState<Record<string, unknown>[]>([])
+  const recolhaAberta = previsaoRecolha.find((r) => String(r.status ?? '').trim().toUpperCase() === 'EM ANDAMENTO')
+  const [recolhaResolvidaLocal, setRecolhaResolvidaLocal] = useState(false)
+  const recolhaBloqueando = !!recolhaAberta && !recolhaResolvidaLocal
+  const [processandoRecolha, setProcessandoRecolha] = useState(false)
+  const [erroRecolha, setErroRecolha] = useState<string | null>(null)
+  const [parcelaVencidaBloqueio, setParcelaVencidaBloqueio] = useState(false)
+  const [recolhaSucesso, setRecolhaSucesso] = useState<'PERMANECEU' | null>(null)
   const [vistoriasDisponiveis, setVistoriasDisponiveis] = useState<string[]>([])
   const [vistoriasIncluir, setVistoriasIncluir] = useState<Record<string, unknown>[]>([])
   const [vistoriasRetirar, setVistoriasRetirar] = useState<Record<string, unknown>[]>([])
@@ -558,6 +568,11 @@ export default function MovimentacaoPage() {
     setKmDisponibilidade('')
     setCombustivelDisponibilidade('')
     setVideoDisponibilidadeFile(null)
+    setPrevisaoRecolha([])
+    setRecolhaResolvidaLocal(false)
+    setErroRecolha(null)
+    setParcelaVencidaBloqueio(false)
+    setRecolhaSucesso(null)
     processarFotoPlaca(canvas.toDataURL('image/jpeg', 0.85))
   }
 
@@ -1203,6 +1218,11 @@ export default function MovimentacaoPage() {
     setKmDisponibilidade('')
     setCombustivelDisponibilidade('')
     setVideoDisponibilidadeFile(null)
+    setPrevisaoRecolha([])
+    setRecolhaResolvidaLocal(false)
+    setErroRecolha(null)
+    setParcelaVencidaBloqueio(false)
+    setRecolhaSucesso(null)
     const reader = new FileReader()
     reader.onload = (ev) => processarFotoPlaca(ev.target?.result as string)
     reader.readAsDataURL(file)
@@ -1248,6 +1268,11 @@ export default function MovimentacaoPage() {
     setVistoriasDisponiveis([])
     setPendenciasVeiculo([])
     setContratoAptoEntrega(false)
+    setPrevisaoRecolha([])
+    setRecolhaResolvidaLocal(false)
+    setErroRecolha(null)
+    setParcelaVencidaBloqueio(false)
+    setRecolhaSucesso(null)
     try {
       const data = await chamarBubble('consulta-veiculo-funcoes', { placa: placaValue.trim().toUpperCase() })
       const vistoriasRaw: Record<string, unknown>[] = data.response?.vistorias ?? []
@@ -1256,12 +1281,74 @@ export default function MovimentacaoPage() {
       setVistoriasIncluir(data.response?.['vistorias-incluir'] ?? [])
       setVistoriasRetirar(data.response?.['vistorias-retirar'] ?? [])
       setPendenciasVeiculo(data.response?.pendencia ?? [])
+      setPrevisaoRecolha(data.response?.['previsao-recolha'] ?? [])
       const numeroContrato = (data.response?.contrato as { 'Numero ctr'?: number } | undefined)?.['Numero ctr']
       checarContratoAptoEntrega(placaValue, numeroContrato)
     } catch {
       setErro('Não foi possível consultar as funções disponíveis para esta placa.')
     } finally {
       setCarregandoFuncoes(false)
+    }
+  }
+
+  // Recolha em aberto: ou confirma que recolheu a moto (segue pra vistoria de
+  // devolução) ou verifica se o cliente pode continuar com ela (sem parcela vencida)
+  async function confirmarRecolha() {
+    if (!recolhaAberta || !veiculoFuncoes?._id) return
+    setProcessandoRecolha(true)
+    setErroRecolha(null)
+    try {
+      const contratoId = (veiculoFuncoes.contrato as { _id?: string } | undefined)?._id ?? ''
+      const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
+      await chamarBubble('base-confirmar-recolha', {
+        placa: veiculoFuncoes._id,
+        contrato: contratoId,
+        recolha: recolhaAberta._id,
+        nome: String(user?.Nome ?? user?.nome ?? ''),
+      })
+      setRecolhaResolvidaLocal(true)
+      capturarLocalizacaoAtual().then((loc) => { if (loc) setGeoLocationDevolucao(loc) })
+      setAcao('vistorias')
+      setTipoSelecionado('DEVOLUÇÃO')
+    } catch (err) {
+      setErroRecolha(`Erro ao confirmar recolha: ${String(err)}`)
+    } finally {
+      setProcessandoRecolha(false)
+    }
+  }
+
+  async function manterComCliente() {
+    if (!recolhaAberta || !veiculoFuncoes?._id) return
+    setProcessandoRecolha(true)
+    setErroRecolha(null)
+    setParcelaVencidaBloqueio(false)
+    try {
+      const contratoId = (veiculoFuncoes.contrato as { _id?: string } | undefined)?._id ?? ''
+      const data = await chamarBubble('base-consulta-parcelas', { contrato: contratoId })
+      const parcelas: Record<string, unknown>[] = data?.response?.parcelas ?? []
+      const inicioDoDia = (ts: number) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime() }
+      const hoje = inicioDoDia(Date.now())
+      const temParcelaVencida = parcelas.some((p) => {
+        const vencimento = p['vencimento']
+        return p['status'] === 'GERADO' && typeof vencimento === 'number' && inicioDoDia(vencimento) < hoje
+      })
+      if (temParcelaVencida) {
+        setParcelaVencidaBloqueio(true)
+        return
+      }
+      const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
+      await chamarBubble('base-permanece-com-locatario', {
+        placa: veiculoFuncoes._id,
+        contrato: contratoId,
+        recolha: recolhaAberta._id,
+        nome: String(user?.Nome ?? user?.nome ?? ''),
+      })
+      setRecolhaResolvidaLocal(true)
+      setRecolhaSucesso('PERMANECEU')
+    } catch (err) {
+      setErroRecolha(`Erro ao processar: ${String(err)}`)
+    } finally {
+      setProcessandoRecolha(false)
     }
   }
 
@@ -1303,6 +1390,12 @@ export default function MovimentacaoPage() {
     setKmDisponibilidade('')
     setCombustivelDisponibilidade('')
     setVideoDisponibilidadeFile(null)
+    setPrevisaoRecolha([])
+    setRecolhaResolvidaLocal(false)
+    setProcessandoRecolha(false)
+    setErroRecolha(null)
+    setParcelaVencidaBloqueio(false)
+    setRecolhaSucesso(null)
     resetDevolucao()
     resetSubNova()
     if (inputRef.current) inputRef.current.value = ''
@@ -1586,7 +1679,60 @@ export default function MovimentacaoPage() {
           </div>
         )}
 
-        {!analisando && placa && pendenciasAtivas.length > 0 && (
+        {/* Recolha em aberto — bloqueia tudo até confirmar a recolha ou manter com o cliente */}
+        {!analisando && placa && veiculoFuncoes && !!veiculoFuncoes._id && recolhaBloqueando && (
+          <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-amber-500 px-4 py-2.5 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-white" />
+              <span className="text-xs font-medium text-white">Recolha em aberto</span>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-amber-800">
+                Esta moto tem uma recolha pendente{recolhaAberta?.motivo ? `: ${String(recolhaAberta.motivo)}` : '.'} Confirme se a moto foi recolhida ou se vai permanecer com o cliente.
+              </p>
+
+              {parcelaVencidaBloqueio && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 flex items-start gap-2">
+                  <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700">Esse locatário tem parcelas vencidas e não pode permanecer com a moto.</p>
+                </div>
+              )}
+
+              {erroRecolha && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">{erroRecolha}</div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  className="gap-1.5 bg-red-600 hover:bg-red-700"
+                  disabled={processandoRecolha}
+                  onClick={confirmarRecolha}
+                >
+                  {processandoRecolha ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Confirmar recolha
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-1.5"
+                  disabled={processandoRecolha}
+                  onClick={manterComCliente}
+                >
+                  {processandoRecolha ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Manter com o cliente
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!analisando && placa && !recolhaBloqueando && recolhaSucesso === 'PERMANECEU' && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+            <p className="text-xs text-green-700">Moto liberada para permanecer com o cliente.</p>
+          </div>
+        )}
+
+        {!analisando && placa && !recolhaBloqueando && pendenciasAtivas.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
             <div className="space-y-1">
@@ -1601,7 +1747,7 @@ export default function MovimentacaoPage() {
         )}
 
         {/* Seleção de ação - cards com ícone */}
-        {!analisando && placa && veiculoFuncoes && !!veiculoFuncoes._id && !acao && (
+        {!analisando && placa && veiculoFuncoes && !!veiculoFuncoes._id && !acao && !recolhaBloqueando && (
           <div className="space-y-2">
             <p className="text-sm font-medium">O que deseja fazer?</p>
             <div className="grid grid-cols-2 gap-3">
