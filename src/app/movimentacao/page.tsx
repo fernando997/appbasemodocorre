@@ -420,7 +420,7 @@ export default function MovimentacaoPage() {
   const [processandoRecolha, setProcessandoRecolha] = useState(false)
   const [erroRecolha, setErroRecolha] = useState<string | null>(null)
   const [parcelaVencidaBloqueio, setParcelaVencidaBloqueio] = useState(false)
-  const [recolhaSucesso, setRecolhaSucesso] = useState<'PERMANECEU' | null>(null)
+  const [recolhaSucesso, setRecolhaSucesso] = useState<'PERMANECEU' | 'CONFIRMADA' | null>(null)
   const [vistoriasDisponiveis, setVistoriasDisponiveis] = useState<string[]>([])
   const [vistoriasIncluir, setVistoriasIncluir] = useState<Record<string, unknown>[]>([])
   const [vistoriasRetirar, setVistoriasRetirar] = useState<Record<string, unknown>[]>([])
@@ -1291,8 +1291,9 @@ export default function MovimentacaoPage() {
     }
   }
 
-  // Recolha em aberto: ou confirma que recolheu a moto (segue pra vistoria de
-  // devolução) ou verifica se o cliente pode continuar com ela (sem parcela vencida)
+  // Recolha em aberto: ou confirma que recolheu a moto ou verifica se o
+  // cliente pode continuar com ela (sem parcela vencida) — em ambos os casos
+  // só desbloqueia a tela normal de Funções, sem forçar nenhum fluxo
   async function confirmarRecolha() {
     if (!recolhaAberta || !veiculoFuncoes?._id) return
     setProcessandoRecolha(true)
@@ -1307,9 +1308,7 @@ export default function MovimentacaoPage() {
         nome: String(user?.Nome ?? user?.nome ?? ''),
       })
       setRecolhaResolvidaLocal(true)
-      capturarLocalizacaoAtual().then((loc) => { if (loc) setGeoLocationDevolucao(loc) })
-      setAcao('vistorias')
-      setTipoSelecionado('DEVOLUÇÃO')
+      setRecolhaSucesso('CONFIRMADA')
     } catch (err) {
       setErroRecolha(`Erro ao confirmar recolha: ${String(err)}`)
     } finally {
@@ -1725,10 +1724,12 @@ export default function MovimentacaoPage() {
           </div>
         )}
 
-        {!analisando && placa && !recolhaBloqueando && recolhaSucesso === 'PERMANECEU' && (
+        {!analisando && placa && !recolhaBloqueando && recolhaSucesso && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-            <p className="text-xs text-green-700">Moto liberada para permanecer com o cliente.</p>
+            <p className="text-xs text-green-700">
+              {recolhaSucesso === 'PERMANECEU' ? 'Moto liberada para permanecer com o cliente.' : 'Recolha confirmada.'}
+            </p>
           </div>
         )}
 
