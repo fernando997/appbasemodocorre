@@ -408,6 +408,7 @@ export default function MovimentacaoPage() {
 
   const [veiculoFuncoes, setVeiculoFuncoes] = useState<Record<string, unknown> | null>(null)
   const statusLocado = String(veiculoFuncoes?.status_veiculo_desc ?? '').toUpperCase() === 'LOCADO'
+  const contratoDevolucaoId = (veiculoFuncoes?.contrato as { _id?: string } | undefined)?._id ?? ''
   const clienteInfo = veiculoFuncoes?.cliente as { nome_completo?: string; celular?: string } | undefined
   const [pendenciasVeiculo, setPendenciasVeiculo] = useState<Record<string, unknown>[]>([])
   const pendenciasAtivas = pendenciasVeiculo.filter((p) => p.status === 'ATIVO')
@@ -883,6 +884,10 @@ export default function MovimentacaoPage() {
 
   async function enviarVistoriaDevolucao() {
     if (!placa || !kmDevolucao) return
+    if (!contratoDevolucaoId) {
+      setErro('Moto sem contrato — não é possível enviar a vistoria de devolução.')
+      return
+    }
     setEnviandoVistoria(true)
     setErro(null)
     setEtapaEnvio('upload')
@@ -944,7 +949,7 @@ export default function MovimentacaoPage() {
         PDF: pdfUrl,
         TIPO: 'DEVOLUÇÃO',
         VIDEO: videoDetalhesUrl,
-        CONTRATO: (veiculoFuncoes?.contrato as { _id?: string } | undefined)?._id ?? '',
+        CONTRATO: contratoDevolucaoId,
         'VIDEO-2': videoAvariasUrl,
         'VIDEO-3': videoViolacaoUrl,
         MANUTENCAO: sn(perguntasDevolucao.manutencaoEstetica),
@@ -3076,13 +3081,19 @@ export default function MovimentacaoPage() {
                       />
                     </div>
 
+                    {tipoSelecionado === 'DEVOLUÇÃO' && !contratoDevolucaoId && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        Moto sem contrato — não é possível enviar a vistoria de devolução.
+                      </p>
+                    )}
+
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Button variant="outline" className="gap-1 h-12" onClick={() => setEtapaDevolucao(5)}>
                         <ChevronLeft className="w-3.5 h-3.5" /> Voltar
                       </Button>
                       <Button
                         className="flex-1 gap-2 bg-red-600 hover:bg-red-700 h-12"
-                        disabled={!kmDevolucao.trim() || (veiculoFuncoes?.km != null && Number(kmDevolucao) < Number(veiculoFuncoes.km))}
+                        disabled={!kmDevolucao.trim() || (veiculoFuncoes?.km != null && Number(kmDevolucao) < Number(veiculoFuncoes.km)) || (tipoSelecionado === 'DEVOLUÇÃO' && !contratoDevolucaoId)}
                         onClick={tipoSelecionado === 'SUBSTITUIÇÃO' ? enviarVistoriaSubstituicao : enviarVistoriaDevolucao}
                       >
                         <CheckCircle2 className="w-5 h-5" />
