@@ -120,31 +120,6 @@ function omitirVazios<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return out
 }
 
-// Extrai só a mensagem de texto da resposta do registro de substituição
-// (ex: { status: 'success', response: { vazio: 'Nenhuma placa registrada ainda' } } → 'Nenhuma placa registrada ainda')
-function extrairMensagemRegistro(registro: unknown): string {
-  if (typeof registro === 'string') return registro
-  if (registro && typeof registro === 'object') {
-    const response = (registro as Record<string, unknown>).response
-    if (typeof response === 'string') return response
-    if (response && typeof response === 'object') {
-      const valor = Object.values(response as Record<string, unknown>).find(v => typeof v === 'string')
-      if (typeof valor === 'string') return valor
-    }
-  }
-  return JSON.stringify(registro)
-}
-
-// Traduz a mensagem bruta do registro (as 3 fixas que o Bubble devolve) pra
-// algo que faça sentido mostrar pro operador antes de finalizar a vistoria
-function mensagemAmigavelRegistro(raw: string): string {
-  const texto = raw.toLowerCase()
-  if (texto.includes('nenhuma placa registrada')) return 'Sua parte foi registrada. Aguardando a outra parte concluir a vistoria dela.'
-  if (texto.includes('placa nova')) return 'A vistoria da moto nova já foi concluída pelo cliente. Sua parte também foi registrada.'
-  if (texto.includes('placa antiga')) return 'A vistoria da moto antiga já foi concluída. Sua parte também foi registrada.'
-  return raw
-}
-
 function fmtData(ts: unknown): string {
   if (!ts) return '-'
   const d = new Date(ts as number)
@@ -441,8 +416,7 @@ export default function MovimentacaoPage() {
   const [erroManutencaoRastreador, setErroManutencaoRastreador] = useState<string | null>(null)
   const [manutencaoRastreadorSolicitada, setManutencaoRastreadorSolicitada] = useState(false)
   const [enviandoVistoria, setEnviandoVistoria] = useState(false)
-  const [etapaEnvio, setEtapaEnvio] = useState<'upload' | 'registro' | 'vistoria' | 'concluido' | null>(null)
-  const [mensagemRegistroSub, setMensagemRegistroSub] = useState<string | null>(null)
+  const [etapaEnvio, setEtapaEnvio] = useState<'upload' | 'vistoria' | 'concluido' | null>(null)
   const [vistoriaSucesso, setVistoriaSucesso] = useState(false)
   // Devolução
   const [etapaDevolucao, setEtapaDevolucao] = useState(0)
@@ -478,9 +452,6 @@ export default function MovimentacaoPage() {
   const [enderecosRastreador, setEnderecosRastreador] = useState<Record<string, string>>({})
   const [linkVistoriaSub, setLinkVistoriaSub] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
-  // Guarda a resposta do registro de substituição já gravado — se o envio final
-  // falhar e o operador tentar de novo, não registra a mesma vistoria duas vezes
-  const registroSubRef = useRef<string | null>(null)
   const [linkVistoriaEntrega, setLinkVistoriaEntrega] = useState('')
   const [linkEntregaCopiado, setLinkEntregaCopiado] = useState(false)
   const [contratoAptoEntrega, setContratoAptoEntrega] = useState(false)
@@ -684,8 +655,6 @@ export default function MovimentacaoPage() {
   }
 
   function resetSubNova() {
-    registroSubRef.current = null
-    setMensagemRegistroSub(null)
     setSubFase('placa')
     setModoSub(null)
     setPlacaEsperadaId('')
@@ -871,17 +840,6 @@ export default function MovimentacaoPage() {
     return data.url as string
   }
 
-  // Registra/verifica quem já terminou a vistoria de substituição — a moto nova
-  // pode ser finalizada pelo cliente (link) antes ou depois da moto antiga aqui
-  async function registrarVistoriaSubstituicao(contratoId: string, placaNova: string, placaAntiga: string, modo: 'INCLUIR' | 'RETIRAR'): Promise<unknown> {
-    const endpoint = modo === 'RETIRAR' ? 'base-registro-vistoria-retirar' : 'base-registro-vistoria-substituicao'
-    return chamarBubble(endpoint, {
-      contrato: contratoId,
-      'placa-nova': placaNova,
-      'placa-antiga': placaAntiga,
-    })
-  }
-
   async function enviarVistoriaDevolucao() {
     if (!placa || !kmDevolucao) return
     if (!contratoDevolucaoId) {
@@ -995,22 +953,13 @@ export default function MovimentacaoPage() {
       const contratoId = contratoObj?._id ?? ''
       const numeroContrato = contratoObj?.['Numero ctr'] ?? ''
 
-      // Verifica se o cliente já terminou a vistoria da moto nova (ou se esta
-      // é a primeira ponta a terminar) — é a primeira coisa que faz, antes de
-      // gastar tempo gerando PDF/upload, e garante que o envio final só
-      // acontece depois dessa checagem responder
-      setEtapaEnvio('registro')
-      const modo = modoSub ?? 'INCLUIR'
-      let registroTexto = registroSubRef.current
-      if (registroTexto == null) {
-        const registro = await registrarVistoriaSubstituicao(contratoId, placaNovaSub.trim().toUpperCase(), placa.trim().toUpperCase(), modo)
-        if (!registro) {
-          throw new Error('Não foi possível registrar a vistoria de substituição (resposta vazia). Tente novamente.')
-        }
-        registroTexto = extrairMensagemRegistro(registro)
-        registroSubRef.current = registroTexto
+      // O NOVO-sub-incluir / NOVO-sub-retirar cria ou completa o registro da
+      // substituição no próprio Bubble — o site não consulta mais o estado da
+      // outra ponta antes de enviar, então "Tentar novamente" é seguro
+      if (!contratoId) {
+        throw new Error('Moto sem contrato — não é possível enviar a vistoria de substituição.')
       }
-      setMensagemRegistroSub(mensagemAmigavelRegistro(registroTexto))
+      const modo = modoSub ?? 'INCLUIR'
 
       setEtapaEnvio('upload')
 
@@ -1062,35 +1011,30 @@ export default function MovimentacaoPage() {
 
       const sn = (val: boolean | null) => val === true ? 'SIM' : 'NÃO'
       const body = omitirVazios({
-        PLACA_ANTIGA: placa.trim().toUpperCase(),
-        KM_ANTIGA: kmDevolucao,
-        PDF_ANTIGA: pdfAntigaUrl,
-        TIPO: 'SUBSTITUIÇÃO',
-        VIDEO_ANTIGA: videoAntigaUrl,
-        VIDEO_ANTIGA_VIOLACAO: videoViolacaoUrl,
-        CONTRATO: numeroContrato,
-        PLACA_NOVA: placaNovaSub.trim().toUpperCase(),
-        KM_NOVA: '',
-        PDF_NOVA: '',
-        VIDEO_NOVA: '',
-        TXT: modo,
-        MSG: registroTexto,
-        ONDE: 'MOTO-ANTIGA',
-        MANUTENCAO: sn(perguntasDevolucao.manutencaoEstetica),
-        PNEUS: sn(perguntasDevolucao.pneusMalEstado),
-        VAZAMENTO: sn(perguntasDevolucao.vazamentoOleo),
-        LIGANDO: sn(perguntasDevolucao.motoLigando),
-        FUMACA: sn(perguntasDevolucao.fumandoEscapamento),
-        FALHANDO: sn(perguntasDevolucao.falhando),
-        VALVULA: sn(perguntasDevolucao.batendoValvula),
-        CANO: sn(perguntasDevolucao.canoAdulterado),
-        FILTRO: sn(perguntasDevolucao.semFiltroAr),
-        VIOLACAO: sn(violacaoRastreamento),
-        NOME: String(user?.Nome ?? user?.nome ?? ''),
-        USER: String(user?.cpf ?? ''),
+        contrato: contratoId,
+        txt: modo,
+        onde: 'MOTO-ANTIGA',
+        placa_antiga: placa.trim().toUpperCase(),
+        placa_nova: placaNovaSub.trim().toUpperCase(),
+        nome: String(user?.Nome ?? user?.nome ?? ''),
+        user: String(user?.cpf ?? ''),
+        pdf: pdfAntigaUrl,
+        video: videoAntigaUrl,
+        video_violacao: videoViolacaoUrl,
+        km: kmDevolucao,
+        manutencao: sn(perguntasDevolucao.manutencaoEstetica),
+        pneus: sn(perguntasDevolucao.pneusMalEstado),
+        vazamento: sn(perguntasDevolucao.vazamentoOleo),
+        ligando: sn(perguntasDevolucao.motoLigando),
+        fumaca: sn(perguntasDevolucao.fumandoEscapamento),
+        falhando: sn(perguntasDevolucao.falhando),
+        valvula: sn(perguntasDevolucao.batendoValvula),
+        cano: sn(perguntasDevolucao.canoAdulterado),
+        filtro: sn(perguntasDevolucao.semFiltroAr),
+        violacao: sn(violacaoRastreamento),
       })
 
-      const endpointFinal = modo === 'RETIRAR' ? 'base-vitoria-sub-retirar' : 'base_vistoria_nova_sub'
+      const endpointFinal = modo === 'RETIRAR' ? 'NOVO-sub-retirar' : 'NOVO-sub-incluir'
 
       await chamarBubble(endpointFinal, body, 'json')
 
@@ -1457,27 +1401,10 @@ export default function MovimentacaoPage() {
     </div>
   )
 
-  // Progresso de envio reutilizável — comRegistro liga a etapa extra de
-  // "verificando a outra parte" (só existe na Substituição)
-  const renderProgressoEnvio = (corPrimaria: string, comRegistro = false) => (
+  // Progresso de envio reutilizável
+  const renderProgressoEnvio = (corPrimaria: string) => (
     <div className="rounded-xl border bg-gradient-to-b from-slate-50 to-white p-6 space-y-5">
       <div className="flex flex-col items-center gap-4">
-        {comRegistro && (
-          <div className={`flex items-center gap-3 w-full transition-all duration-500 ${etapaEnvio === 'registro' ? 'opacity-100' : 'opacity-50'}`}>
-            <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${
-              etapaEnvio === 'registro' ? `bg-${corPrimaria}-100 text-${corPrimaria}-600` : etapaEnvio === 'upload' || etapaEnvio === 'vistoria' || etapaEnvio === 'concluido' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-            }`}>
-              {etapaEnvio === 'registro' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            </div>
-            <div>
-              <p className="text-sm font-medium">Verificando substituição</p>
-              <p className="text-xs text-muted-foreground">
-                {etapaEnvio === 'registro' ? 'Consultando status da outra parte...' : (mensagemRegistroSub ?? '—')}
-              </p>
-            </div>
-          </div>
-        )}
-
         <div className={`flex items-center gap-3 w-full transition-all duration-500 ${etapaEnvio === 'upload' ? 'opacity-100' : etapaEnvio === 'vistoria' || etapaEnvio === 'concluido' ? 'opacity-50' : 'opacity-30'}`}>
           <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${
             etapaEnvio === 'upload' ? `bg-${corPrimaria}-100 text-${corPrimaria}-600` : etapaEnvio === 'vistoria' || etapaEnvio === 'concluido' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
@@ -3106,7 +3033,7 @@ export default function MovimentacaoPage() {
 
               {/* Progresso de envio */}
               {(enviandoVistoria || vistoriaSucesso) && (tipoSelecionado === 'DEVOLUÇÃO' || tipoSelecionado === 'SUBSTITUIÇÃO') && (
-                renderProgressoEnvio(tipoSelecionado === 'SUBSTITUIÇÃO' ? 'purple' : 'red', tipoSelecionado === 'SUBSTITUIÇÃO')
+                renderProgressoEnvio(tipoSelecionado === 'SUBSTITUIÇÃO' ? 'purple' : 'red')
               )}
 
               {/* Voltar para tipos (quando não está enviando) */}

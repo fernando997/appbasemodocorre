@@ -30,30 +30,6 @@ function omitirVazios<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return out
 }
 
-// Extrai só a mensagem de texto da resposta do registro de substituição
-function extrairMensagemRegistro(registro: unknown): string {
-  if (typeof registro === 'string') return registro
-  if (registro && typeof registro === 'object') {
-    const response = (registro as Record<string, unknown>).response
-    if (typeof response === 'string') return response
-    if (response && typeof response === 'object') {
-      const valor = Object.values(response as Record<string, unknown>).find(v => typeof v === 'string')
-      if (typeof valor === 'string') return valor
-    }
-  }
-  return JSON.stringify(registro)
-}
-
-// Traduz a mensagem bruta do registro (as 3 fixas que o Bubble devolve) pra
-// algo que faça sentido mostrar pro cliente antes de finalizar a vistoria
-function mensagemAmigavelRegistro(raw: string): string {
-  const texto = raw.toLowerCase()
-  if (texto.includes('nenhuma placa registrada')) return 'Sua parte foi registrada. Estamos aguardando a base concluir a vistoria da moto antiga.'
-  if (texto.includes('placa nova')) return 'A vistoria da moto nova já havia sido registrada. Atualizamos com os seus dados.'
-  if (texto.includes('placa antiga')) return 'A vistoria da moto antiga já foi concluída pela base. Sua parte também foi registrada.'
-  return raw
-}
-
 const FOTOS_ENTREGA = [
   { id: 'frente', label: 'Foto da Frente' },
   { id: 'ladoDireito', label: 'Lado Direito (lado do pesinho)' },
@@ -134,8 +110,8 @@ function VistoriaEntregaContent() {
   // Placa antiga (já vinculada ao contrato) — usada só pra localizar a CNH do cliente.
   // A vistoria em si (fotos, km, envio) é sempre da placa nova (`placa` acima).
   const placaContrato = searchParams.get('placaContrato') || placa
-  // unique_id do contrato — usado no registro de substituição (diferente do `contrato` acima, que é o número)
-  const contratoId = searchParams.get('contratoId') || contrato
+  // unique_id do contrato — exigido pelo NOVO-sub-incluir (diferente do `contrato` acima, que é o número)
+  const contratoId = searchParams.get('contratoId')
 
   const [etapa, setEtapa] = useState(0)
   const [etapaKey, setEtapaKey] = useState(0)
@@ -191,8 +167,7 @@ function VistoriaEntregaContent() {
   // Etapa 6 - Envio
   const [enviando, setEnviando] = useState(false)
   const [erroEnvio, setErroEnvio] = useState('')
-  const [envioStatus, setEnvioStatus] = useState<'pdf' | 'registro' | 'salvando'>('pdf')
-  const [mensagemRegistroSub, setMensagemRegistroSub] = useState<string | null>(null)
+  const [envioStatus, setEnvioStatus] = useState<'pdf' | 'salvando'>('pdf')
 
   const theme = STEP_THEMES[etapa] || STEP_THEMES[0]
 
@@ -421,25 +396,11 @@ function VistoriaEntregaContent() {
     setEnviando(true)
     setErroEnvio('')
     try {
-      // Registra/verifica quem já terminou a vistoria de substituição — é a
-      // primeira coisa que faz, antes de gerar PDF/subir arquivos, e garante
-      // que o envio final só acontece depois dessa checagem responder
-      setEnvioStatus('registro')
-      let registro: unknown
-      try {
-        registro = await chamarBubble('base-registro-vistoria-substituicao', {
-          contrato: contratoId ?? '',
-          'placa-nova': placa!.trim().toUpperCase(),
-          'placa-antiga': (placaContrato ?? '').trim().toUpperCase(),
-        })
-      } catch (err) {
-        throw new Error(`Erro ao registrar vistoria de substituição: ${String(err)}`)
+      // O NOVO-sub-incluir cria ou completa o registro da substituição no próprio
+      // Bubble — o site não consulta mais o estado da outra parte antes de enviar
+      if (!contratoId) {
+        throw new Error('Link sem o identificador do contrato (contratoId). Peça um novo link à base.')
       }
-      if (!registro) {
-        throw new Error('Não foi possível registrar a vistoria de substituição (resposta vazia). Tente novamente.')
-      }
-      const registroTexto = extrairMensagemRegistro(registro)
-      setMensagemRegistroSub(mensagemAmigavelRegistro(registroTexto))
 
       setEnvioStatus('pdf')
       let localizacaoAtual = geoLocation
@@ -510,23 +471,18 @@ function VistoriaEntregaContent() {
       setEnvioStatus('salvando')
 
       const body = omitirVazios({
-        PLACA_ANTIGA: (placaContrato ?? '').trim().toUpperCase(),
-        KM_ANTIGA: '',
-        PDF_ANTIGA: '',
-        TIPO: 'SUBSTITUIÇÃO',
-        VIDEO_ANTIGA: '',
-        CONTRATO: contrato ?? '',
-        PLACA_NOVA: placa!.trim().toUpperCase(),
-        KM_NOVA: km,
-        PDF_NOVA: pdfUrl,
-        VIDEO_NOVA: videoUrl,
-        TXT: 'INCLUIR',
-        MSG: registroTexto,
-        ONDE: 'MOTO-NOVA',
+        contrato: contratoId,
+        txt: 'INCLUIR',
+        onde: 'MOTO-NOVA',
+        placa_antiga: (placaContrato ?? '').trim().toUpperCase(),
+        placa_nova: placa!.trim().toUpperCase(),
+        km,
+        pdf: pdfUrl,
+        video: videoUrl,
       })
 
       try {
-        await chamarBubble('base_vistoria_nova_sub', body, 'json')
+        await chamarBubble('NOVO-sub-incluir', body, 'json')
       } catch (err) {
         throw new Error(`Erro ao registrar vistoria: ${String(err)}`)
       }
@@ -948,10 +904,10 @@ function VistoriaEntregaContent() {
                 <>
                   <Loader2 className="w-16 h-16 animate-spin text-[#6C63FF]" />
                   <h2 className="text-xl font-bold text-white text-center animate-pulse">
-                    {envioStatus === 'pdf' ? 'Gerando PDF...' : envioStatus === 'registro' ? 'Verificando substituição...' : 'Salvando vistoria...'}
+                    {envioStatus === 'pdf' ? 'Gerando PDF...' : 'Salvando vistoria...'}
                   </h2>
                   <p className="text-sm text-white/60">
-                    {envioStatus === 'pdf' ? 'Aguarde enquanto preparamos o relatorio.' : envioStatus === 'registro' ? 'Consultando o status da outra parte.' : 'Quase lá.'}
+                    {envioStatus === 'pdf' ? 'Aguarde enquanto preparamos o relatorio.' : 'Quase lá.'}
                   </p>
                 </>
               ) : erroEnvio ? (
@@ -1015,11 +971,6 @@ function VistoriaEntregaContent() {
                 Vistoria concluida!
               </h2>
               <p className="text-sm text-white/60 text-center">O PDF foi gerado e baixado automaticamente.</p>
-              {mensagemRegistroSub && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4 w-full">
-                  <p className="text-sm text-white/80 text-center">{mensagemRegistroSub}</p>
-                </div>
-              )}
             </div>
           </div>
         )
