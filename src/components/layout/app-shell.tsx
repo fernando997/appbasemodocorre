@@ -6,6 +6,7 @@ import { Home, LayoutDashboard, Bike, Activity, LogOut, ChevronDown, Check, Buil
 import { cn } from '@/lib/utils'
 import { Sidebar } from './sidebar'
 import { setUnidadeAtiva } from '@/lib/unidade-ativa'
+import { NotificacaoBateria, useTrocasBateria, type TrocasBateriaState } from './notificacao-bateria'
 
 type Unidade = { _id: string; 'Nome Unidade': string }
 
@@ -124,7 +125,7 @@ function UnidadeDropdown({ unidades, unidadeAtiva, onTrocar }: {
 }
 
 function MobileHeader({
-  nomeUser, labelUnidade, isAdmin, unidades, unidadeAtiva, onTrocarUnidade, onDeslogar,
+  nomeUser, labelUnidade, isAdmin, unidades, unidadeAtiva, onTrocarUnidade, onDeslogar, trocasBateria,
 }: {
   nomeUser: string
   labelUnidade: string
@@ -133,6 +134,7 @@ function MobileHeader({
   unidadeAtiva: string
   onTrocarUnidade: (val: string) => void
   onDeslogar: () => void
+  trocasBateria: TrocasBateriaState
 }) {
   return (
     <header className="lg:hidden flex items-center gap-3 px-4 py-2 bg-[#1B2043] text-slate-100 shrink-0 border-b border-[#2A2F5B]">
@@ -150,6 +152,7 @@ function MobileHeader({
           labelUnidade && <p className="text-xs text-[#8E92B3] leading-tight mt-0.5">{labelUnidade}</p>
         )}
       </div>
+      <NotificacaoBateria estado={trocasBateria} />
       <button onClick={onDeslogar} className="p-1 text-[#8E92B3] hover:text-red-400 transition-colors shrink-0">
         <LogOut className="w-4 h-4" />
       </button>
@@ -165,6 +168,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [unidadeAtiva, setUnidadeAtivaState] = useState('todas')
   const router = useRouter()
+  // Uma única consulta para os dois headers (celular e desktop)
+  const trocasBateria = useTrocasBateria()
 
   useEffect(() => {
     setPlataforma(detectarPlataforma())
@@ -210,7 +215,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const isMobileNav = plataforma === 'ios' || plataforma === 'android'
-  const headerProps = { nomeUser, labelUnidade, isAdmin, unidades, unidadeAtiva, onTrocarUnidade: trocarUnidade, onDeslogar: deslogar }
+  const headerProps = { nomeUser, labelUnidade, isAdmin, unidades, unidadeAtiva, onTrocarUnidade: trocarUnidade, onDeslogar: deslogar, trocasBateria }
 
   return (
     <div className="flex h-full">
@@ -236,6 +241,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Outro: header simples */}
         {!isMobileNav && <MobileHeader {...headerProps} />}
+
+        {/* Desktop: sino flutuante no canto inferior direito */}
+        <div className="hidden lg:block fixed bottom-6 right-6 z-40">
+          <NotificacaoBateria estado={trocasBateria} flutuante />
+        </div>
 
         <main className={cn(
           'flex-1 overflow-x-hidden overflow-y-auto bg-[#EEF0F8]',
