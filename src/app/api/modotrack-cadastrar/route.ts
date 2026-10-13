@@ -38,6 +38,7 @@ async function chamarModotrack(caminho: string, init?: RequestInit): Promise<{ o
 // id=2 vs "MODO CORRE CUIABÁ-MT" id=8, e "Várzea Grande" só existe como "VG"
 // — por isso não dá pra confiar em match automático por nome)
 const CLIENT_ID_POR_CIDADE: Record<string, number> = {
+  AMERICANA: 16,
   CAMPINAS: 7,
   CUIABA: 8,
   'RIO PRETO': 9,
