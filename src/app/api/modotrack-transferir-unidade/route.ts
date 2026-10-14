@@ -71,13 +71,6 @@ export async function POST(req: NextRequest) {
   const placa = String(body?.placa ?? '').trim().toUpperCase()
   const unidadeNome = String(body?.unidadeNome ?? '').trim()
 
-  // TEMPORÁRIO: resposta fixa só pra inicializar a chamada no API Connector
-  // do Bubble sem executar nada — remover depois da inicialização
-  const SO_INICIALIZAR = true
-  if (SO_INICIALIZAR) {
-    return NextResponse.json({ ok: true, motivo: '', placa, vehicleId: 0, clientIdAnterior: 0, clientId: 0 })
-  }
-
   const chaveRecebida = req.headers.get('X-API-Key')
   if (!chaveRecebida || chaveRecebida !== process.env.APP_API_KEY) {
     return NextResponse.json({ ok: false, motivo: 'API Key inválida', placa })
