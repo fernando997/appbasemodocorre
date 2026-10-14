@@ -418,6 +418,9 @@ export default function MovimentacaoPage() {
   const [enviandoVistoria, setEnviandoVistoria] = useState(false)
   const [etapaEnvio, setEtapaEnvio] = useState<'upload' | 'vistoria' | 'concluido' | null>(null)
   const [vistoriaSucesso, setVistoriaSucesso] = useState(false)
+  // Alerta de transferência — fica aberto até o usuário fechar (não é limpo
+  // pelo reset de 3s depois do envio da vistoria)
+  const [transferenciaAberta, setTransferenciaAberta] = useState<{ origem: string; destino: string } | null>(null)
   // Devolução
   const [etapaDevolucao, setEtapaDevolucao] = useState(0)
   const [fotosDevolucao, setFotosDevolucao] = useState<Record<string, string | null>>(FOTOS_DEVOLUCAO_INICIAL)
@@ -830,6 +833,71 @@ export default function MovimentacaoPage() {
     }
   }
 
+  // Depois da vistoria de devolução/disponibilidade: descobre em qual base a
+  // vistoria foi feita (GPS × link do Google Maps das unidades, raio de 3km —
+  // mesma lógica do recebimento) e, se for diferente da unidade atual da moto,
+  // abre uma solicitação de transferência na base. A aprovação (trocar a
+  // unidade no Bubble e na ModoTrack) acontece do lado do Bubble.
+  // Nunca bloqueia a vistoria: GPS negado, sem base no raio ou qualquer erro → ignora
+  async function verificarTransferenciaUnidade(
+    localizacao: { lat: number; lng: number } | 'negado' | null,
+    veiculo: Record<string, unknown> | null,
+    tipoVistoria: 'DEVOLUÇÃO' | 'DISPONIBILIDADE',
+  ) {
+    try {
+      if (!localizacao || localizacao === 'negado' || !veiculo) return
+      const veiculoId = String(veiculo._id ?? '')
+      const unidadeAtualId = String(veiculo.Unidade ?? '')
+      if (!veiculoId || !unidadeAtualId) return
+
+      const dataUnidades = await chamarBubble('achar-unidade', {}, 'json')
+      const unidades: Record<string, unknown>[] = dataUnidades?.response?.unidade ?? []
+      if (unidades.length === 0) return
+
+      const res = await fetch('/api/localizar-unidade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: localizacao.lat,
+          lng: localizacao.lng,
+          unidades: unidades.map((u) => ({
+            id: u._id,
+            nome: u['Nome Unidade'],
+            link: u['End Link google '],
+          })),
+        }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      const dentroDoRaio: { id: string; nome: string }[] = data?.unidades ?? []
+      if (dentroDoRaio.length === 0) return
+
+      // Duas unidades podem estar no mesmo endereço — se a atual da moto está
+      // no raio, não tem transferência
+      if (dentroDoRaio.some((u) => u.id === unidadeAtualId)) return
+      const destino = dentroDoRaio[0]
+      const origemNome = String(unidades.find((u) => u._id === unidadeAtualId)?.['Nome Unidade'] ?? '')
+
+      const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
+      const km = veiculo.km != null ? String(veiculo.km) : undefined
+      const resp = await chamarBubble('registrar-solicitacao-base', {
+        data: String(Date.now()),
+        veiculo: veiculoId,
+        // Mesmo padrão dos outros tipos: descrição = valor novo que a aprovação
+        // aplica — nome exato da unidade no Bubble ('Nome Unidade' do achar-unidade)
+        descricao: destino.nome,
+        tipo: 'TRANSFERÊNCIA UNIDADE',
+        motivo: `Vistoria de ${tipoVistoria.toLowerCase()} feita na unidade ${destino.nome}${origemNome ? ` (unidade atual: ${origemNome})` : ''}`,
+        user: user?._id ?? '',
+        ...(km ? { km } : {}),
+      })
+      const mensagemBloqueio = resp?.response?.MENSAGEM ?? resp?.MENSAGEM
+      if (mensagemBloqueio) return
+
+      setTransferenciaAberta({ origem: origemNome, destino: destino.nome })
+    } catch {}
+  }
+
   async function uploadArquivo(file: File): Promise<string> {
     const tamanhoMB = (file.size / 1024 / 1024).toFixed(2)
     const form = new FormData()
@@ -925,6 +993,9 @@ export default function MovimentacaoPage() {
       }
 
       await chamarBubble('vistoria_devolucao', body, 'json')
+
+      // Em paralelo — não segura a tela de sucesso
+      void verificarTransferenciaUnidade(localizacaoAtual, veiculoFuncoes, 'DEVOLUÇÃO')
 
       setEtapaEnvio('concluido')
       setVistoriaSucesso(true)
@@ -1085,6 +1156,10 @@ export default function MovimentacaoPage() {
     try {
       const user = (() => { try { return JSON.parse(localStorage.getItem('mc_user') ?? '{}') } catch { return {} } })()
 
+      // Localização do dispositivo no momento da vistoria — usada só pra
+      // checar transferência de unidade (ver verificarTransferenciaUnidade)
+      const localizacaoPromise = capturarLocalizacaoAtual()
+
       const uploadForm = new FormData()
       uploadForm.append('foto', videoDisponibilidadeFile, videoDisponibilidadeFile.name)
       const uploadRes = await fetch('/api/upload-foto', { method: 'POST', body: uploadForm })
@@ -1102,6 +1177,10 @@ export default function MovimentacaoPage() {
       }
 
       await chamarBubble('base_vistoria_disponibilidade', body, 'json')
+
+      // Em paralelo — não segura a tela de sucesso
+      const veiculoVistoria = veiculoFuncoes
+      void localizacaoPromise.then((loc) => verificarTransferenciaUnidade(loc, veiculoVistoria, 'DISPONIBILIDADE'))
 
       setEtapaEnvio('concluido')
       setVistoriaSucesso(true)
@@ -3385,6 +3464,23 @@ export default function MovimentacaoPage() {
         </DialogHeader>
         <p className="text-sm text-muted-foreground">{mensagemBloqueioSolicitacao}</p>
         <Button className="w-full" onClick={() => setMensagemBloqueioSolicitacao('')}>Entendi</Button>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={!!transferenciaAberta} onOpenChange={(open) => { if (!open) setTransferenciaAberta(null) }}>
+      <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-amber-500" />
+            Transferência de unidade
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Será aberta uma solicitação de transferência de unidade dessa moto
+          {transferenciaAberta?.origem ? <> de <strong>{transferenciaAberta.origem}</strong></> : null}
+          {' '}para <strong>{transferenciaAberta?.destino}</strong>.
+        </p>
+        <Button className="w-full" onClick={() => setTransferenciaAberta(null)}>Entendi</Button>
       </DialogContent>
     </Dialog>
     </>
