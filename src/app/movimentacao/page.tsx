@@ -1904,7 +1904,7 @@ export default function MovimentacaoPage() {
                 <Button
                   className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
                   disabled={!fotoPainelKmFile || !novoKm.trim() || !motivoSolicitacao.trim() || enviandoSolicitacao}
-                  onClick={() => enviarSolicitacaoBase(novoKm.trim(), 'ALTERAÇÃO KM', motivoSolicitacao.trim(), fotoPainelKmFile)}
+                  onClick={() => enviarSolicitacaoBase(novoKm.trim(), 'ALTERAÇÃO KM', motivoSolicitacao.trim(), fotoPainelKmFile, veiculoFuncoes?.km != null ? String(veiculoFuncoes.km) : undefined)}
                 >
                   {enviandoSolicitacao ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Confirmar
