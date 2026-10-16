@@ -797,7 +797,9 @@ export default function MovimentacaoPage() {
       const data = await chamarBubble('registrar-solicitacao-base', {
         data: String(Date.now()),
         veiculo: veiculoId,
-        descricao: 'MANUTENÇÃO DE RASTREADOR',
+        // Precisa bater com a descrição do status de movimentação no Bubble —
+        // a aprovação procura o status por esse texto
+        descricao: 'MANUTENÇÃO DE RASTREAMENTO',
         tipo: 'MANUTENÇÃO',
         motivo: 'Solicitado via app da base no momento da vistoria de disponibilidade',
         user: user?._id ?? '',
