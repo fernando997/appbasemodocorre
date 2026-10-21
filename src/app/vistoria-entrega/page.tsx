@@ -28,8 +28,18 @@ const FOTOS_ENTREGA = [
   { id: 'ladoEsquerdo', label: 'Lado Esquerdo (lado do escapamento)' },
 ] as const
 
+// Mesma correção de posição do /api/ler-placa (5º caractere vira letra), aplicada
+// nos dois lados — senão placa no formato antigo (ABC1234) nunca bateria
+const DIGITO_PARA_LETRA: Record<string, string> = { '0': 'O', '1': 'I', '2': 'Z', '3': 'E', '4': 'A', '5': 'S', '6': 'G', '7': 'T', '8': 'B' }
+function normalizarPlaca(p: string): string {
+  const s = p.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (s.length !== 7) return s
+  return s.slice(0, 4) + (DIGITO_PARA_LETRA[s[4]] ?? s[4]) + s.slice(5)
+}
+
 const ETAPAS = [
   { label: 'Selfie', icon: UserCircle },
+  { label: 'Placa', icon: Camera },
   { label: 'Fotos', icon: ImageIcon },
   { label: 'Avarias', icon: AlertTriangle },
   { label: 'Video', icon: Video },
@@ -41,6 +51,7 @@ const ETAPAS = [
 
 const STEP_THEMES = [
   { color: '#6C63FF', name: 'purple' },
+  { color: '#F97316', name: 'orange' },
   { color: '#3B82F6', name: 'blue' },
   { color: '#F59E0B', name: 'yellow' },
   { color: '#EC4899', name: 'pink' },
@@ -132,25 +143,32 @@ function VistoriaEntregaContent() {
   const [facialErro, setFacialErro] = useState('')
   const [facialStep, setFacialStep] = useState(0) // 0=idle, 1=enviando, 2=analisando, 3=comparando
 
-  // Etapa 1 - Fotos
+  // Etapa 1 - Foto da placa (IA lê e confere com a placa da vistoria)
+  const [fotoPlaca, setFotoPlaca] = useState<string | null>(null)
+  const [lendoPlaca, setLendoPlaca] = useState(false)
+  const [placaConferida, setPlacaConferida] = useState(false)
+  const [erroPlaca, setErroPlaca] = useState('')
+  const fotoPlacaRef = useRef<HTMLInputElement>(null)
+
+  // Etapa 2 - Fotos
   const [fotos, setFotos] = useState<Record<string, string>>({})
   const [fotoAtualIdx, setFotoAtualIdx] = useState(0)
   const fotoRef = useRef<HTMLInputElement>(null)
 
-  // Etapa 3 - Video
+  // Etapa 4 - Video
   const [videoAvarias, setVideoAvarias] = useState<string | null>(null)
   const [videoAvariasFile, setVideoAvariasFile] = useState<File | null>(null)
 
-  // Etapa 4 - KM
+  // Etapa 5 - KM
   const [km, setKm] = useState('')
   const [kmErro, setKmErro] = useState('')
 
-  // Etapa 5 - Geolocation
+  // Etapa 6 - Geolocation
   const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number } | 'negado' | null>(null)
   const [geoErro, setGeoErro] = useState('')
   const [geoCarregando, setGeoCarregando] = useState(false)
 
-  // Etapa 6 - Envio
+  // Etapa 7 - Envio
   const [enviando, setEnviando] = useState(false)
   const [erroEnvio, setErroEnvio] = useState('')
 
@@ -349,15 +367,57 @@ function VistoriaEntregaContent() {
   function podeAvancar(): boolean {
     switch (etapa) {
       case 0: return !!selfie && !validandoFacial
-      case 1: return fotosCount === 4
-      case 2: return true
-      case 3: return !!videoAvarias
-      case 4: {
+      case 1: return placaConferida && !lendoPlaca
+      case 2: return fotosCount === 4
+      case 3: return true
+      case 4: return !!videoAvarias
+      case 5: {
         if (!km) return false
         if (veiculoKm != null && Number(km) < veiculoKm) return false
         return true
       }
       default: return true
+    }
+  }
+
+  async function onFotoPlaca(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !placa) return
+    setPlacaConferida(false)
+    setErroPlaca('')
+    setLendoPlaca(true)
+    try {
+      // Comprime antes de mandar pra IA (mesmo padrão da movimentação)
+      const dataUrl = await readFileAsDataUrl(file)
+      const img = new Image()
+      await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = reject; img.src = dataUrl })
+      const scale = Math.min(1, 800 / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const compressed = canvas.toDataURL('image/jpeg', 0.7)
+      setFotoPlaca(compressed)
+
+      const res = await fetch('/api/ler-placa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: compressed.split(',')[1], semFipe: true }),
+      })
+      const data = await res.json().catch(() => null)
+      const lida = String(data?.placa ?? '')
+      if (!lida) {
+        setErroPlaca('Não foi possível ler a placa. Tire outra foto mais de perto e com boa iluminação.')
+      } else if (normalizarPlaca(lida) !== normalizarPlaca(placa)) {
+        setErroPlaca(`A placa da foto (${lida}) não confere com a placa da vistoria (${placa.toUpperCase()}). Tire a foto da placa correta.`)
+      } else {
+        setPlacaConferida(true)
+      }
+    } catch {
+      setErroPlaca('Erro ao ler a placa. Tente novamente.')
+    } finally {
+      setLendoPlaca(false)
     }
   }
 
@@ -445,10 +505,13 @@ function VistoriaEntregaContent() {
           contrato: contrato!,
           km,
           selfieDataUrl: selfie,
-          fotos: FOTOS_ENTREGA.map(f => ({
-            label: f.label,
-            dataUrl: fotos[f.id] || null,
-          })),
+          fotos: [
+            { label: 'Foto da Placa', dataUrl: fotoPlaca },
+            ...FOTOS_ENTREGA.map(f => ({
+              label: f.label,
+              dataUrl: fotos[f.id] || null,
+            })),
+          ],
           geoLocation: localizacaoAtual,
           videoUrl,
         })
@@ -480,7 +543,7 @@ function VistoriaEntregaContent() {
         throw new Error(`Erro ao registrar vistoria: ${String(err)}`)
       }
 
-      mudarEtapa(7)
+      mudarEtapa(8)
     } catch (err) {
       setErroEnvio(String(err))
     } finally {
@@ -497,18 +560,18 @@ function VistoriaEntregaContent() {
       validarFacial()
       return
     }
-    if (etapa === 4) {
+    if (etapa === 5) {
       if (veiculoKm != null && Number(km) < veiculoKm) {
         setKmErro(`KM nao pode ser inferior ao ultimo registrado (${veiculoKm} km)`)
         return
       }
       setKmErro('')
     }
-    if (etapa === 5) {
-      mudarEtapa(6)
+    if (etapa === 6) {
+      mudarEtapa(7)
       return
     }
-    if (etapa === 6) {
+    if (etapa === 7) {
       finalizarVistoria()
       return
     }
@@ -713,6 +776,69 @@ function VistoriaEntregaContent() {
       case 1:
         return (
           <GradientBorderCard etapaKey={etapaKey} themeColor={theme.color}>
+            <div className="flex flex-col items-center gap-4">
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-white">Foto da Placa</h2>
+                <p className="text-sm text-white/60 mt-1">Fotografe a placa da moto para confirmar que é a <strong className="text-white">{placa?.toUpperCase()}</strong>.</p>
+              </div>
+              <button
+                onClick={() => fotoPlacaRef.current?.click()}
+                disabled={lendoPlaca}
+                className={`relative w-full rounded-2xl flex flex-col items-center justify-center min-h-[180px] overflow-hidden transition-all duration-200 ${
+                  placaConferida
+                    ? 'border-2 border-[#22C55E]/50 bg-white/5 shadow-[0_0_15px_rgba(34,197,94,0.15)]'
+                    : erroPlaca
+                      ? 'border-2 border-red-500/50 bg-white/5'
+                      : 'border-2 border-dashed border-[#F97316]/40 bg-white/5 hover:border-[#F97316]/60 hover:bg-white/10'
+                }`}
+              >
+                {fotoPlaca ? (
+                  <img src={fotoPlaca} alt="Foto da placa" className="w-full h-full object-cover absolute inset-0" />
+                ) : (
+                  <>
+                    <Camera className="w-8 h-8 text-white/30 mb-1" />
+                    <span className="text-xs text-white/50 text-center">Fotografar placa</span>
+                  </>
+                )}
+                {placaConferida && (
+                  <div className="absolute top-2 right-2 bg-[#22C55E] rounded-full p-0.5 shadow-[0_0_8px_rgba(34,197,94,0.4)]">
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </button>
+              <input ref={fotoPlacaRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFotoPlaca} />
+              {lendoPlaca && (
+                <div className="flex items-center gap-2 text-sm text-white/60">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Conferindo placa...
+                </div>
+              )}
+              {placaConferida && (
+                <div className="bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-xl p-3 w-full">
+                  <p className="text-sm text-[#4ADE80] text-center">Placa conferida: {placa?.toUpperCase()}</p>
+                </div>
+              )}
+              {erroPlaca && !lendoPlaca && (
+                <>
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 w-full" style={{ animation: 'shakeX 0.5s ease-out' }}>
+                    <p className="text-sm text-red-300 text-center">{erroPlaca}</p>
+                  </div>
+                  <Button
+                    onClick={() => fotoPlacaRef.current?.click()}
+                    className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px]"
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    Tirar outra foto
+                  </Button>
+                </>
+              )}
+            </div>
+          </GradientBorderCard>
+        )
+
+      case 2:
+        return (
+          <GradientBorderCard etapaKey={etapaKey} themeColor={theme.color}>
             <div className="flex flex-col gap-4">
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3">
                 <div className="flex items-start gap-2">
@@ -759,7 +885,7 @@ function VistoriaEntregaContent() {
           </GradientBorderCard>
         )
 
-      case 2:
+      case 3:
         return (
           <InfoCard etapaKey={etapaKey} themeColor={theme.color}>
             <div className="flex flex-col items-center gap-5">
@@ -775,7 +901,7 @@ function VistoriaEntregaContent() {
               <div className="flex gap-3 w-full">
                 <Button
                   className="flex-1 bg-[#22C55E] hover:bg-[#16A34A] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white font-bold min-h-[48px] text-base"
-                  onClick={() => mudarEtapa(3)}
+                  onClick={() => mudarEtapa(4)}
                 >
                   SIM
                 </Button>
@@ -794,7 +920,7 @@ function VistoriaEntregaContent() {
           </InfoCard>
         )
 
-      case 3:
+      case 4:
         return (
           <GradientBorderCard etapaKey={etapaKey} themeColor={theme.color}>
             <div className="flex flex-col items-center gap-4">
@@ -813,7 +939,7 @@ function VistoriaEntregaContent() {
           </GradientBorderCard>
         )
 
-      case 4:
+      case 5:
         return (
           <InfoCard etapaKey={etapaKey} themeColor={theme.color}>
             <div className="flex flex-col items-center gap-4">
@@ -843,7 +969,7 @@ function VistoriaEntregaContent() {
           </InfoCard>
         )
 
-      case 5:
+      case 6:
         return (
           <InfoCard etapaKey={etapaKey} themeColor={theme.color}>
             <div className="flex flex-col items-center gap-4">
@@ -882,7 +1008,7 @@ function VistoriaEntregaContent() {
           </InfoCard>
         )
 
-      case 6:
+      case 7:
         return (
           <div
             key={etapaKey}
@@ -930,7 +1056,7 @@ function VistoriaEntregaContent() {
           </div>
         )
 
-      case 7:
+      case 8:
         return (
           <div
             key={etapaKey}
@@ -969,7 +1095,7 @@ function VistoriaEntregaContent() {
     }
   }
 
-  const showNav = etapa !== 2 && etapa !== 6 && etapa !== 7
+  const showNav = etapa !== 3 && etapa !== 7 && etapa !== 8
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#080C1F] via-[#1B2043] to-[#2E4080] flex flex-col relative overflow-hidden">
@@ -1081,8 +1207,8 @@ function VistoriaEntregaContent() {
                 disabled={!podeAvancar() || enviando}
                 className="flex-1 bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:shadow-[0_0_25px_rgba(34,197,94,0.5)] shadow-[0_4px_15px_rgba(34,197,94,0.4)] text-white disabled:opacity-30 min-h-[52px] text-base font-bold transition-all duration-200"
               >
-                {etapa === 6 ? 'Finalizar' : 'Proximo'}
-                {etapa < 6 && <ChevronRight className="w-4 h-4 ml-1" />}
+                {etapa === 7 ? 'Finalizar' : 'Proximo'}
+                {etapa < 7 && <ChevronRight className="w-4 h-4 ml-1" />}
               </Button>
             </div>
           </div>
