@@ -692,7 +692,7 @@ export default function MovimentacaoPage() {
         const res = await fetch('/api/ler-placa', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: b64 }),
+          body: JSON.stringify({ image: b64, semFipe: true }),
         })
         const data = await res.json()
         if (data.placa) {
@@ -1359,7 +1359,9 @@ export default function MovimentacaoPage() {
       const hoje = inicioDoDia(Date.now())
       const temParcelaVencida = parcelas.some((p) => {
         const vencimento = p['vencimento']
-        return p['status'] === 'GERADO' && typeof vencimento === 'number' && inicioDoDia(vencimento) < hoje
+        // <= igual ao Terminate do base-permanece-com-locatario: parcela que
+        // vence hoje já bloqueia, senão o Bubble para em silêncio
+        return p['status'] === 'GERADO' && typeof vencimento === 'number' && inicioDoDia(vencimento) <= hoje
       })
       if (temParcelaVencida) {
         setParcelaVencidaBloqueio(true)

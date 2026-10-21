@@ -16,6 +16,17 @@ function corrigirPlacaMercosul(placa: string): string {
   }).join('')
 }
 
+// FIPE fora do ar não pode derrubar a leitura — devolve a placa com dadosMoto null
+async function consultarFipe(placa: string): Promise<unknown> {
+  try {
+    const res = await fetch(`${FIPE_URL}/${placa}?key=${FIPE_KEY}`)
+    return await res.json()
+  } catch (err) {
+    console.error('[ler-placa] Falha na FIPE:', err)
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -23,9 +34,7 @@ export async function POST(req: NextRequest) {
     // chamada direta com placa já conhecida — pula a IA
     if (body.placa) {
       const placa = (body.placa as string).toUpperCase().replace(/[^A-Z0-9]/g, '')
-      const fipeRes = await fetch(`${FIPE_URL}/${placa}?key=${FIPE_KEY}`)
-      const dadosMoto = await fipeRes.json()
-      return NextResponse.json({ placa, dadosMoto })
+      return NextResponse.json({ placa, dadosMoto: await consultarFipe(placa) })
     }
 
     const { image } = body
@@ -106,11 +115,13 @@ PLACA: (os 7 caracteres finais no formato LLLNLNN, sem espaços/traços/pontuaç
       return NextResponse.json({ placa: '', dadosMoto: null })
     }
 
-    // 2. FIPE API — consulta por placa
-    const fipeRes = await fetch(`${FIPE_URL}/${placa}?key=${FIPE_KEY}`)
-    const dadosMoto = await fipeRes.json()
+    // Quem só precisa da placa (ex: moto nova da substituição) pula a FIPE
+    if (body.semFipe) {
+      return NextResponse.json({ placa, dadosMoto: null })
+    }
 
-    return NextResponse.json({ placa, dadosMoto })
+    // 2. FIPE API — consulta por placa
+    return NextResponse.json({ placa, dadosMoto: await consultarFipe(placa) })
   } catch (err) {
     return NextResponse.json({ erro: String(err) }, { status: 500 })
   }
