@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bike, Loader2 } from 'lucide-react'
-import { BUBBLE_BASE, BUBBLE_KEY } from '@/lib/config'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -55,12 +54,12 @@ export default function LiberacaoPage() {
   async function consultarAgendadas() {
     setErro(null)
     const unidades = getUnidadesAtivas()
-    const endpoint = `${BUBBLE_BASE}/saida-entrada`
     try {
-      const res = await fetch(endpoint, {
+      // Proxy server-side — a apikey é injetada em /api/bubble
+      const res = await fetch('/api/bubble', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apikey: BUBBLE_KEY, unidades }),
+        body: JSON.stringify({ endpoint: 'saida-entrada', body: { unidades }, format: 'json' }),
       })
       const text = await res.text()
       if (!res.ok) throw new Error(`HTTP ${res.status}`)

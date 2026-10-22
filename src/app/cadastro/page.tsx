@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { Loader2, UserPlus } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
-import { BUBBLE_BASE, BUBBLE_KEY } from '@/lib/config'
 
 type Unidade = {
   _id: string
@@ -58,16 +57,20 @@ export default function CadastroPage() {
     setSucesso(false)
 
     try {
-      const form = new FormData()
-      form.append('apikey', BUBBLE_KEY)
-      form.append('nome', nome.toUpperCase())
-      form.append('tipo', tipo.toUpperCase())
-      form.append('celular', Number(celular).toString())
-      form.append('unidade', JSON.stringify(isAdmin ? unidadesSelecionadas : [unidadeSelecionada]))
-
-      const res = await fetch(`${BUBBLE_BASE}/cadastrar-user-base`, {
+      // Proxy server-side — a apikey é injetada em /api/bubble (que reenvia como form)
+      const res = await fetch('/api/bubble', {
         method: 'POST',
-        body: form,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: 'cadastrar-user-base',
+          format: 'form',
+          body: {
+            nome: nome.toUpperCase(),
+            tipo: tipo.toUpperCase(),
+            celular: Number(celular).toString(),
+            unidade: JSON.stringify(isAdmin ? unidadesSelecionadas : [unidadeSelecionada]),
+          },
+        }),
       })
 
       const data = await res.json()

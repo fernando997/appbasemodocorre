@@ -4,11 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Phone, KeyRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { BUBBLE_BASE as API_BASE, BUBBLE_KEY as API_KEY } from '@/lib/config'
 
-function gerarCodigo(): string {
-  return String(Math.floor(100000 + Math.random() * 900000))
-}
+// O código é gerado e conferido pelo Bubble (enviar-codigo / valida-codigo).
+// Ele é salvo como número, então um código começando com 0 chega com menos dígitos.
+const MIN_DIGITOS_CODIGO = 4
 
 // Bloqueio de tentativas de login por telefone (armazenado no navegador)
 const MAX_TENTATIVAS = 5
@@ -67,7 +66,6 @@ export default function LoginPage() {
   const [etapa, setEtapa] = useState<'telefone' | 'codigo'>('telefone')
   const [telefone, setTelefone] = useState('')
   const [codigo, setCodigo] = useState('')
-  const [codigoGerado, setCodigoGerado] = useState('')
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -81,22 +79,18 @@ export default function LoginPage() {
     setCarregando(true)
     setErro(null)
 
-    const gerado = gerarCodigo()
-
     try {
-      const payload = { apikey: API_KEY, telefone: Number(telefone), codigo: gerado }
+      const payload = { telefone: Number(telefone) }
 
-      const res = await fetch(`${API_BASE}/enviar-codigo`, {
+      // Proxy server-side — a apikey é injetada em /api/bubble
+      const res = await fetch('/api/bubble', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ endpoint: 'enviar-codigo', body: payload, format: 'json' }),
       })
-
-      const data = await res.json()
 
       if (!res.ok) throw new Error()
 
-      setCodigoGerado(gerado)
       setEtapa('codigo')
     } catch {
       setErro('Não foi possível enviar o código. Verifique o número e tente novamente.')
@@ -107,33 +101,27 @@ export default function LoginPage() {
 
   async function handleValidarCodigo(e: React.FormEvent) {
     e.preventDefault()
-    if (codigo.length < 6) return
+    if (codigo.length < MIN_DIGITOS_CODIGO) return
 
     const bloqueio = checarBloqueio(telefone)
     if (bloqueio) { setErro(bloqueio); return }
-
-    if (codigo !== codigoGerado) {
-      registrarFalha(telefone)
-      const bloqueioNovo = checarBloqueio(telefone)
-      setErro(bloqueioNovo ?? 'Código incorreto. Tente novamente.')
-      return
-    }
 
     setCarregando(true)
     setErro(null)
 
     try {
-      const res = await fetch(`${API_BASE}/valida-codigo`, {
+      const res = await fetch('/api/bubble', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apikey: API_KEY, telefone: Number(telefone), codigo }),
+        body: JSON.stringify({ endpoint: 'valida-codigo', body: { telefone: Number(telefone), codigo: Number(codigo) }, format: 'json' }),
       })
 
       if (!res.ok) throw new Error()
 
       const data = await res.json()
 
-      if (data.status !== 'success') throw new Error()
+      // Código errado/expirado: o Bubble responde success, mas sem o user
+      if (data.status !== 'success' || !data.response?.user) throw new Error()
 
       limparTentativas(telefone)
 
@@ -159,7 +147,6 @@ export default function LoginPage() {
   function voltarParaTelefone() {
     setEtapa('telefone')
     setCodigo('')
-    setCodigoGerado('')
     setErro(null)
   }
 
@@ -290,7 +277,7 @@ export default function LoginPage() {
 
                   <Button
                     type="submit"
-                    disabled={carregando || codigo.length < 6}
+                    disabled={carregando || codigo.length < MIN_DIGITOS_CODIGO}
                     className="w-full"
                   >
                     {carregando

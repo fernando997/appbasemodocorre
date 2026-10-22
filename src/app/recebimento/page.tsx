@@ -21,7 +21,6 @@ import {
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
-import { BUBBLE_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_AUTH_TOKEN } from '@/lib/config'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
 
 // Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
@@ -320,14 +319,11 @@ export default function RecebimentoPage() {
 
   async function consultarPedido(numeroPedido: number) {
     try {
-      const res = await fetch(`${SUPABASE_URL}/consultar-pedido`, {
+      // Proxy server-side — as chaves do Supabase ficam em /api/pedido
+      const res = await fetch('/api/pedido', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_AUTH_TOKEN}`,
-        },
-        body: JSON.stringify({ numero: numeroPedido }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'consultar', numero: numeroPedido }),
       })
       const data = await res.json()
       if (data.success) setPedidoData(data.pedido as Record<string, unknown>)
@@ -790,15 +786,10 @@ export default function RecebimentoPage() {
         // motos achadas pelo fluxo novo (achar-moto-base) não estão em `motos`
         // (lista filtrada por unidade) — usa o resultado da busca como alternativa
         const chassiMoto = motos.find((m) => m._id === ativa)?.chassi ?? (resultadoMotoBubble?.veiculo.chassi as string | undefined)
-        await fetch(`${SUPABASE_URL}/receber-veiculo`, {
+        await fetch('/api/pedido', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'x-api-key': BUBBLE_KEY,
-          },
-          body: JSON.stringify({ pedido_numero: pedidoData?.numero, chassi: chassiMoto }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acao: 'receber', pedido_numero: pedidoData?.numero, chassi: chassiMoto }),
         })
       }
 

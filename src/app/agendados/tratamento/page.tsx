@@ -32,7 +32,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { BUBBLE_BASE, BUBBLE_KEY } from '@/lib/config'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
 import { format } from 'date-fns'
 
@@ -97,10 +96,11 @@ async function emitirSinal(placa: string): Promise<ResultadoSinal> {
 
 // Confirma no Bubble que os 2 rastreadores (principal e backup) responderam pra essa previsão
 async function confirmarTesteRastreamento(previstoId: string): Promise<void> {
-  const res = await fetch(`${BUBBLE_BASE}/teste-rastreamento`, {
+  // Proxy server-side — a apikey é injetada em /api/bubble
+  const res = await fetch('/api/bubble', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ apikey: BUBBLE_KEY, previsto: previstoId }),
+    body: JSON.stringify({ endpoint: 'teste-rastreamento', body: { previsto: previstoId }, format: 'json' }),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
@@ -379,12 +379,11 @@ export default function TratamentoPage() {
     setCarregando(true)
     setErro(null)
     const unidades = getUnidadesAtivas()
-    const endpoint = `${BUBBLE_BASE}/saida-entrada`
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/bubble', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apikey: BUBBLE_KEY, unidades }),
+        body: JSON.stringify({ endpoint: 'saida-entrada', body: { unidades }, format: 'json' }),
       })
       const text = await res.text()
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
