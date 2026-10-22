@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   KeyRound,
   Loader2,
+  MapPin,
   RotateCcw,
   Search,
   X,
@@ -87,7 +88,9 @@ function validarLiberacao(r: ResultadoLiberacao, rastreador: StatusRastreador): 
 
 // Rastreamento trava a liberação: precisa de posição de pelo menos uma
 // plataforma (principal, backup ou tag), igual à v2
-async function testarRastreador(placa: string): Promise<StatusRastreador> {
+type LocRastreador = { lat: number | null; long: number | null; plataforma: string | null }
+
+async function testarRastreador(placa: string): Promise<{ status: StatusRastreador; localizacoes: Record<string, LocRastreador> }> {
   try {
     const res = await fetch('/api/rastreador', {
       method: 'POST',
@@ -95,10 +98,11 @@ async function testarRastreador(placa: string): Promise<StatusRastreador> {
       body: JSON.stringify({ placa }),
     })
     const data = await res.json()
-    const locs = Object.values(data?.localizacoes ?? {}) as { lat: number | null; long: number | null }[]
-    return locs.some((l) => l?.lat != null && l?.long != null) ? 'ok' : 'falhou'
+    const localizacoes = (data?.localizacoes ?? {}) as Record<string, LocRastreador>
+    const algumaPosicao = Object.values(localizacoes).some((l) => l?.lat != null && l?.long != null)
+    return { status: algumaPosicao ? 'ok' : 'falhou', localizacoes }
   } catch {
-    return 'falhou'
+    return { status: 'falhou', localizacoes: {} }
   }
 }
 
@@ -169,6 +173,7 @@ function LiberacaoCpfContent() {
   const [fotoBase64, setFotoBase64] = useState<string | null>(null)
   const [placaCameraAberta, setPlacaCameraAberta] = useState(false)
   const [rastreador, setRastreador] = useState<StatusRastreador>('testando')
+  const [locsRastreador, setLocsRastreador] = useState<Record<string, LocRastreador>>({})
 
   async function consultar() {
     if (!placa.trim() || !cpf.trim()) {
@@ -184,7 +189,11 @@ function LiberacaoCpfContent() {
       setResultado(res)
       if (res.contrato) {
         setRastreador('testando')
-        testarRastreador(placa.trim().toUpperCase()).then(setRastreador)
+        setLocsRastreador({})
+        testarRastreador(placa.trim().toUpperCase()).then((r) => {
+          setRastreador(r.status)
+          setLocsRastreador(r.localizacoes)
+        })
       }
     } catch {
       setErro('Não foi possível consultar. Verifique a conexão e tente novamente.')
@@ -453,6 +462,42 @@ function LiberacaoCpfContent() {
                         ))}
                       </ul>
                     )}
+                  </div>
+                )}
+
+                {validacao && rastreador !== 'testando' && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-zinc-100 px-3 py-2">
+                      <p className="text-xs font-medium text-zinc-600">Resposta dos rastreadores</p>
+                    </div>
+                    {(['principal', 'backup', 'tag'] as const).map((tipo) => {
+                      const loc = locsRastreador[tipo]
+                      const ok = loc?.lat != null && loc?.long != null
+                      return (
+                        <div key={tipo} className={`flex items-center justify-between gap-2 px-3 py-2.5 border-t ${ok ? 'bg-green-50' : 'bg-red-50'}`}>
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium capitalize">{tipo}</span>
+                            {ok && loc?.plataforma && <span className="ml-2 text-xs text-muted-foreground">{loc.plataforma}</span>}
+                          </div>
+                          {ok ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${loc!.lat},${loc!.long}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs font-semibold text-green-700 hover:underline shrink-0"
+                            >
+                              <MapPin className="w-3.5 h-3.5" />
+                              Ver localização
+                            </a>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs font-semibold text-red-600 shrink-0">
+                              <XCircle className="w-3.5 h-3.5" />
+                              Sem posição
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
 
