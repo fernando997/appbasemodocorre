@@ -94,6 +94,15 @@ function obterUsuarioBubble(): string {
   }
 }
 
+function obterNomeUsuario(): string {
+  try {
+    const raw = JSON.parse(localStorage.getItem('mc_user') ?? '{}')
+    return String(raw?.Nome ?? raw?.nome ?? '')
+  } catch {
+    return ''
+  }
+}
+
 async function consultarLiberacao(placa: string, cpf: string): Promise<ResultadoLiberacao> {
   const data = await chamarBubble('liberacao_veiculo', { placa, cpf })
   const response = data.response ?? data
@@ -108,7 +117,8 @@ async function consultarLiberacao(placa: string, cpf: string): Promise<Resultado
 
 async function liberarMoto(contratoId: string): Promise<void> {
   const user = obterUsuarioBubble()
-  await chamarBubble('liberar_moto', { contrato: contratoId, user })
+  // nome vai pro "validador fast nome" do registro de liberação
+  await chamarBubble('liberar_moto', { contrato: contratoId, user, nome: obterNomeUsuario() })
 }
 
 function LiberacaoCpfContent() {
