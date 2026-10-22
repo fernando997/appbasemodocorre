@@ -45,21 +45,21 @@ type ResultadoLiberacao = {
 
 type Validacao = {
   podeLiberar: boolean
+  carregando: boolean
   motivos: string[]
 }
 
-function validarLiberacao(r: ResultadoLiberacao): Validacao {
-  const motivos: string[] = []
-  const inicioDoDia = (ts: number) => {
-    const d = new Date(ts)
-    d.setHours(0, 0, 0, 0)
-    return d.getTime()
-  }
-  const hoje = inicioDoDia(Date.now())
+type StatusRastreador = 'testando' | 'ok' | 'falhou'
 
+// Mesmas regras da operacional_consulta_de_veiculo-v2 do Bubble
+function validarLiberacao(r: ResultadoLiberacao, rastreador: StatusRastreador): Validacao {
+  const motivos: string[] = []
+  const agora = Date.now()
+
+  // vencida = GERADO com vencimento até agora (a que vence hoje já trava)
   const parcelaVencida = r.parcelas.some((p) => {
     const vencimento = p['vencimento']
-    return p['status'] === 'GERADO' && typeof vencimento === 'number' && inicioDoDia(vencimento) < hoje
+    return p['status'] === 'GERADO' && typeof vencimento === 'number' && vencimento <= agora
   })
   if (parcelaVencida) {
     motivos.push('Existe uma parcela vencida para este contrato.')
@@ -69,12 +69,37 @@ function validarLiberacao(r: ResultadoLiberacao): Validacao {
     motivos.push('Nenhuma vistoria foi realizada nesta moto nas últimas 24 horas.')
   }
 
-  const ultimaIndicacao = r.indicacao[r.indicacao.length - 1]
-  if (!ultimaIndicacao || ultimaIndicacao['tipo'] !== 'INCLUSÃO') {
+  // vale a indicação mais recente pela data — a ordem da lista do Bubble não é garantida
+  const dataIndicacao = (i: Registro) => Number(i['data e hora'] ?? i['Created Date'] ?? 0)
+  const ultimaIndicacao = [...r.indicacao].sort((a, b) => dataIndicacao(b) - dataIndicacao(a))[0]
+  const tipoIndicacao = String(ultimaIndicacao?.['tipo'] ?? '').trim().toUpperCase()
+  if (tipoIndicacao !== 'INCLUSÃO' && tipoIndicacao !== 'INCLUSAO') {
     motivos.push('Não há indicação de condutor ativa para este contrato.')
   }
 
-  return { podeLiberar: motivos.length === 0, motivos }
+  if (rastreador === 'falhou') {
+    motivos.push('O rastreador não respondeu: nenhuma plataforma (ModoTrack ou Getrak) devolveu posição da moto.')
+  }
+
+  const carregando = rastreador === 'testando'
+  return { podeLiberar: motivos.length === 0 && !carregando, carregando, motivos }
+}
+
+// Rastreamento trava a liberação: precisa de posição de pelo menos uma
+// plataforma (principal, backup ou tag), igual à v2
+async function testarRastreador(placa: string): Promise<StatusRastreador> {
+  try {
+    const res = await fetch('/api/rastreador', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placa }),
+    })
+    const data = await res.json()
+    const locs = Object.values(data?.localizacoes ?? {}) as { lat: number | null; long: number | null }[]
+    return locs.some((l) => l?.lat != null && l?.long != null) ? 'ok' : 'falhou'
+  } catch {
+    return 'falhou'
+  }
 }
 
 type RegistroLiberado = {
@@ -143,6 +168,7 @@ function LiberacaoCpfContent() {
   const [foto, setFoto] = useState<string | null>(null)
   const [fotoBase64, setFotoBase64] = useState<string | null>(null)
   const [placaCameraAberta, setPlacaCameraAberta] = useState(false)
+  const [rastreador, setRastreador] = useState<StatusRastreador>('testando')
 
   async function consultar() {
     if (!placa.trim() || !cpf.trim()) {
@@ -156,6 +182,10 @@ function LiberacaoCpfContent() {
     try {
       const res = await consultarLiberacao(placa.trim().toUpperCase(), cpf.trim())
       setResultado(res)
+      if (res.contrato) {
+        setRastreador('testando')
+        testarRastreador(placa.trim().toUpperCase()).then(setRastreador)
+      }
     } catch {
       setErro('Não foi possível consultar. Verifique a conexão e tente novamente.')
     } finally {
@@ -192,7 +222,7 @@ function LiberacaoCpfContent() {
     limparFoto()
   }
 
-  const validacao = resultado?.contrato ? validarLiberacao(resultado) : null
+  const validacao = resultado?.contrato ? validarLiberacao(resultado, rastreador) : null
 
   function processarFotoDataUrl(dataUrl: string) {
     setErro(null)
@@ -404,6 +434,11 @@ function LiberacaoCpfContent() {
                           <CheckCircle2 className="w-4 h-4 text-[#6C63FF]" />
                           <span className="text-sm font-semibold text-[#6C63FF]">Liberado</span>
                         </>
+                      ) : validacao.carregando && validacao.motivos.length === 0 ? (
+                        <>
+                          <Loader2 className="w-4 h-4 text-[#6C63FF] animate-spin" />
+                          <span className="text-sm font-semibold text-[#6C63FF]">Verificando rastreador...</span>
+                        </>
                       ) : (
                         <>
                           <XCircle className="w-4 h-4 text-red-500" />
@@ -411,7 +446,7 @@ function LiberacaoCpfContent() {
                         </>
                       )}
                     </div>
-                    {!validacao.podeLiberar && (
+                    {!validacao.podeLiberar && validacao.motivos.length > 0 && (
                       <ul className="mt-2 space-y-1">
                         {validacao.motivos.map((m) => (
                           <li key={m} className="text-sm text-red-600">• {m}</li>
