@@ -210,6 +210,39 @@ function VistoriaEntregaContent() {
       .finally(() => setCarregandoVeiculo(false))
   }, [placa])
 
+  // Testa os rastreadores (GETRAK + ModoTrack) — principal e backup precisam
+  // devolver posição, senão a vistoria não começa (mesma regra da substituição)
+  const [rastreador, setRastreador] = useState<{
+    status: 'testando' | 'ok' | 'falhou'
+    principal: boolean
+    backup: boolean
+  }>({ status: 'testando', principal: false, backup: false })
+
+  const testarRastreador = useCallback(async () => {
+    if (!placa) return
+    setRastreador({ status: 'testando', principal: false, backup: false })
+    try {
+      const res = await fetch('/api/rastreador', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placa: placa.trim().toUpperCase() }),
+      })
+      const data = await res.json()
+      const temPos = (l?: { lat: number | null; long: number | null }) => l?.lat != null && l?.long != null
+      setRastreador({
+        status: data?.ok ? 'ok' : 'falhou',
+        principal: temPos(data?.localizacoes?.principal),
+        backup: temPos(data?.localizacoes?.backup),
+      })
+    } catch {
+      setRastreador({ status: 'falhou', principal: false, backup: false })
+    }
+  }, [placa])
+
+  useEffect(() => {
+    testarRastreador()
+  }, [testarRastreador])
+
   // Desliga a camera da selfie se o componente desmontar com ela ligada
   useEffect(() => {
     return () => {
@@ -273,6 +306,42 @@ function VistoriaEntregaContent() {
           </div>
           <h2 className="text-lg font-bold text-white mb-2">Link invalido</h2>
           <p className="text-sm text-white/60">Este link precisa conter os parametros <code className="bg-white/10 px-1.5 py-0.5 rounded text-white/80">placa</code> e <code className="bg-white/10 px-1.5 py-0.5 rounded text-white/80">contrato</code>.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (rastreador.status === 'testando') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#080C1F] via-[#1B2043] to-[#2E4080] flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-[#6C63FF]" />
+          <p className="text-sm text-white/60">Verificando rastreadores da moto...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (rastreador.status === 'falhou') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#080C1F] via-[#1B2043] to-[#2E4080] flex items-center justify-center p-4">
+        <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.2)] p-6 text-center max-w-sm w-full">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+            <XCircle className="w-8 h-8 text-red-400" />
+          </div>
+          <h2 className="text-lg font-bold text-white mb-2">Rastreador sem sinal</h2>
+          <p className="text-sm text-white/60 mb-4">A vistoria nao pode ser iniciada porque o rastreador da moto {placa.toUpperCase()} nao respondeu. Entre em contato com a empresa.</p>
+          <div className="space-y-2 mb-4 text-left">
+            {([['Principal', rastreador.principal], ['Backup', rastreador.backup]] as const).map(([nome, ok]) => (
+              <div key={nome} className={`flex items-center justify-between rounded-lg px-3 py-2 ${ok ? 'bg-[#22C55E]/10' : 'bg-red-500/10'}`}>
+                <span className="text-sm text-white/80">{nome}</span>
+                <span className={`text-xs font-semibold ${ok ? 'text-[#4ADE80]' : 'text-red-300'}`}>{ok ? 'Respondeu' : 'Sem sinal'}</span>
+              </div>
+            ))}
+          </div>
+          <Button onClick={testarRastreador} className="bg-white/10 border border-white/20 text-white hover:bg-white/20 min-h-[44px] w-full">
+            Testar novamente
+          </Button>
         </div>
       </div>
     )
