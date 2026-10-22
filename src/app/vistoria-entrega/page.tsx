@@ -330,7 +330,7 @@ function VistoriaEntregaContent() {
             <XCircle className="w-8 h-8 text-red-400" />
           </div>
           <h2 className="text-lg font-bold text-white mb-2">Rastreador sem sinal</h2>
-          <p className="text-sm text-white/60 mb-4">A vistoria nao pode ser iniciada porque o rastreador da moto {placa.toUpperCase()} nao respondeu. Entre em contato com a empresa.</p>
+          <p className="text-sm text-white/60 mb-4">A vistoria nao pode ser iniciada porque o rastreador da moto {placa.toUpperCase()} nao respondeu. Comunique o responsavel da base.</p>
           <div className="space-y-2 mb-4 text-left">
             {([['Principal', rastreador.principal], ['Backup', rastreador.backup]] as const).map(([nome, ok]) => (
               <div key={nome} className={`flex items-center justify-between rounded-lg px-3 py-2 ${ok ? 'bg-[#22C55E]/10' : 'bg-red-500/10'}`}>

@@ -79,15 +79,15 @@ function validarLiberacao(r: ResultadoLiberacao, rastreador: StatusRastreador): 
   }
 
   if (rastreador === 'falhou') {
-    motivos.push('O rastreador não respondeu: nenhuma plataforma (ModoTrack ou Getrak) devolveu posição da moto.')
+    motivos.push('Rastreador sem comunicação: o principal e o backup precisam devolver posição (ModoTrack ou Getrak).')
   }
 
   const carregando = rastreador === 'testando'
   return { podeLiberar: motivos.length === 0 && !carregando, carregando, motivos }
 }
 
-// Rastreamento trava a liberação: precisa de posição de pelo menos uma
-// plataforma (principal, backup ou tag), igual à v2
+// Rastreamento trava a liberação: principal e backup precisam devolver
+// posição (ModoTrack ou Getrak); a tag é só informativa
 type LocRastreador = { lat: number | null; long: number | null; plataforma: string | null }
 
 async function testarRastreador(placa: string): Promise<{ status: StatusRastreador; localizacoes: Record<string, LocRastreador> }> {
@@ -99,8 +99,8 @@ async function testarRastreador(placa: string): Promise<{ status: StatusRastread
     })
     const data = await res.json()
     const localizacoes = (data?.localizacoes ?? {}) as Record<string, LocRastreador>
-    const algumaPosicao = Object.values(localizacoes).some((l) => l?.lat != null && l?.long != null)
-    return { status: algumaPosicao ? 'ok' : 'falhou', localizacoes }
+    const temPos = (l?: LocRastreador) => l?.lat != null && l?.long != null
+    return { status: temPos(localizacoes.principal) && temPos(localizacoes.backup) ? 'ok' : 'falhou', localizacoes }
   } catch {
     return { status: 'falhou', localizacoes: {} }
   }
@@ -473,8 +473,10 @@ function LiberacaoCpfContent() {
                     {(['principal', 'backup', 'tag'] as const).map((tipo) => {
                       const loc = locsRastreador[tipo]
                       const ok = loc?.lat != null && loc?.long != null
+                      // tag sem posição não trava: fica neutra em vez de vermelha
+                      const opcional = tipo === 'tag'
                       return (
-                        <div key={tipo} className={`flex items-center justify-between gap-2 px-3 py-2.5 border-t ${ok ? 'bg-green-50' : 'bg-red-50'}`}>
+                        <div key={tipo} className={`flex items-center justify-between gap-2 px-3 py-2.5 border-t ${ok ? 'bg-green-50' : opcional ? 'bg-zinc-50' : 'bg-red-50'}`}>
                           <div className="min-w-0">
                             <span className="text-sm font-medium capitalize">{tipo}</span>
                             {ok && loc?.plataforma && <span className="ml-2 text-xs text-muted-foreground">{loc.plataforma}</span>}
@@ -490,9 +492,9 @@ function LiberacaoCpfContent() {
                               Ver localização
                             </a>
                           ) : (
-                            <span className="flex items-center gap-1 text-xs font-semibold text-red-600 shrink-0">
+                            <span className={`flex items-center gap-1 text-xs font-semibold shrink-0 ${opcional ? 'text-zinc-500' : 'text-red-600'}`}>
                               <XCircle className="w-3.5 h-3.5" />
-                              Sem posição
+                              {opcional ? 'Sem posição (não obrigatório)' : 'Sem posição'}
                             </span>
                           )}
                         </div>
