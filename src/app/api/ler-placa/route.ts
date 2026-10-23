@@ -47,13 +47,14 @@ export async function POST(req: NextRequest) {
         'Authorization': `Bearer ${OPENAI_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        // gpt-4o-mini confundia letras (ex: leu UPF3C89 como UPC3C89 em foto boa)
+        model: 'gpt-4o',
         messages: [{
           role: 'user',
           content: [
             {
               type: 'image_url',
-              image_url: { url: `data:image/jpeg;base64,${image}` },
+              image_url: { url: `data:image/jpeg;base64,${image}`, detail: 'high' },
             },
             {
               type: 'text',
@@ -81,6 +82,7 @@ Antes de responder, analise CADA um dos 7 caracteres individualmente, um de cada
 - 7/T — posição de letra é T, posição de número é 7
 - I/J (duas letras) — J tem gancho/curva embaixo, I é reto
 - C/G (duas letras) — G tem barra horizontal no meio, C não
+- F/C/E/P (letras) — F tem haste vertical reta à esquerda com 2 barras horizontais (em cima e no meio) e nada embaixo; E tem 3 barras; P tem laço fechado em cima; C é uma curva aberta sem haste reta
 - U/V (duas letras) — U tem fundo arredondado, V é anguloso
 - 2/9 (dois números) — 9 tem laço fechado em cima com perna reta descendo, 2 tem curva em cima e base plana, sem laço fechado
 - 3/8 (dois números) — 8 tem dois laços fechados, 3 é aberto à esquerda
