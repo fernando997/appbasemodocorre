@@ -29,10 +29,13 @@ export function PrevisaoRecolhas({ dados, veiculos = [] }: Props) {
   const veiculoMap = Object.fromEntries(veiculos.map((v) => [v._id, v.placa]))
 
   // A API não filtra recolhas por unidade — filtra aqui pelas motos da unidade ativa (veiculos já vem filtrado)
-  const todas: RecolhaItem[] = (resp?.recolha ?? []).filter((r) => veiculoMap[r.placa ?? ''] != null)
+  const daUnidade: RecolhaItem[] = (resp?.recolha ?? []).filter((r) => veiculoMap[r.placa ?? ''] != null)
+  const statusDe = (r: RecolhaItem) => String(r.status ?? '').trim().toUpperCase()
 
-  const autorizadas = todas.filter((r) => r.status !== 'FINALIZADO')
-  const recolhidas = todas.filter((r) => r.status === 'FINALIZADO')
+  // Em andamento = EM ANDAMENTO (mesma regra de Funções); CANCELADO não entra em nenhuma aba
+  const autorizadas = daUnidade.filter((r) => statusDe(r) === 'EM ANDAMENTO')
+  const recolhidas = daUnidade.filter((r) => statusDe(r) === 'FINALIZADO' || statusDe(r) === 'CONCLUIDO')
+  const todas = [...autorizadas, ...recolhidas]
 
   return (
     <Card className="pt-0">
