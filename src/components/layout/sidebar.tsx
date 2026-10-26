@@ -70,7 +70,9 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     window.location.reload()
   }
 
-  function deslogar() {
+  async function deslogar() {
+    // O cookie de sessão é HttpOnly — só o servidor apaga
+    await fetch('/api/logout', { method: 'POST' }).catch(() => {})
     const expirado = 'expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     document.cookie = `mc_auth=; ${expirado}`
     document.cookie = `mc_unit=; ${expirado}`

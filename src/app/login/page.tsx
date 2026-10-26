@@ -110,10 +110,11 @@ export default function LoginPage() {
     setErro(null)
 
     try {
-      const res = await fetch('/api/bubble', {
+      // /api/login valida no Bubble e grava o cookie de sessão assinado
+      const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: 'valida-codigo', body: { telefone: Number(telefone), codigo: Number(codigo) }, format: 'json' }),
+        body: JSON.stringify({ telefone: Number(telefone), codigo: Number(codigo) }),
       })
 
       if (!res.ok) throw new Error()
