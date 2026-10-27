@@ -18,7 +18,7 @@ const ENDPOINTS_PUBLICOS = new Set([
 const ENDPOINTS_PERMITIDOS = new Set([
   ...ENDPOINTS_PUBLICOS,
   'achar-moto-base', 'achar-unidade', 'base_vistoria_disponibilidade', 'base-chamar-status',
-  'base-confirmar-recolha', 'base-consulta-parcelas', 'base-permanece-com-locatario',
+  'base-confirmar-recolha', 'base-consulta-parcelas', 'base-fechar-ocorrencia', 'base-permanece-com-locatario',
   'chamar-locadoras', 'chamar-recolhas-pendencias', 'chamar-veiculos',
   'check-in-base', 'confirmar-instalação', 'instalacao-motos', 'liberacao_veiculo', 'liberar_moto',
   'NOVO-bateria-abertas', 'NOVO-bateria-assumir', 'NOVO-bateria-finalizar', 'receber-moto',
@@ -31,10 +31,12 @@ const ENDPOINTS_PERMITIDOS = new Set([
 // a chamada real, injetando apikey e o Authorization: Bearer aqui dentro.
 // Monta a URL da versão de desenvolvimento do Bubble (version-test) — usada
 // enquanto um workflow novo ainda não foi promovido pra live
-function bubbleUrl(endpoint: string, versionTest?: boolean): string {
+// (true = version-test; texto = branch, ex.: '53lgt' → version-53lgt)
+function bubbleUrl(endpoint: string, versionTest?: boolean | string): string {
   if (!versionTest) return `${BUBBLE_BASE}/${endpoint}`
+  const versao = typeof versionTest === 'string' && /^[a-z0-9]+$/i.test(versionTest) ? versionTest : 'test'
   const base = new URL(BUBBLE_BASE)
-  base.pathname = `/version-test${base.pathname}`
+  base.pathname = `/version-${versao}${base.pathname}`
   return `${base.toString().replace(/\/$/, '')}/${endpoint}`
 }
 

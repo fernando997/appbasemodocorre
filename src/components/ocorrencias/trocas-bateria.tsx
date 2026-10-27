@@ -19,6 +19,7 @@ async function chamarBubble(endpoint: string, body: Record<string, unknown>): Pr
 const INTERVALO_MS = 60_000
 const STATUS_ABERTO = 'ABERTO'
 const STATUS_EM_EXECUCAO = 'EM EXECUÇÃO'
+const STATUS_FINALIZADO = 'FINALIZADO'
 
 export type TrocaBateria = {
   _id: string
@@ -29,7 +30,9 @@ export type TrocaBateria = {
   placa?: string
   responsavel?: string
   assumida_em?: number | string
+  finalizada_em?: number | string
   'Created Date'?: number | string
+  'Modified Date'?: number | string
 }
 
 type Veiculo = { _id: string; placa?: string }
@@ -71,7 +74,8 @@ export function useTrocasBateria() {
       const data = await chamarBubble('NOVO-bateria-abertas', { unidades })
       const lista: TrocaBateria[] = data?.response?.trocas ?? []
       const veiculos: Veiculo[] = data?.response?.veiculos ?? []
-      setTrocas(lista.filter(t => t.status === STATUS_ABERTO || t.status === STATUS_EM_EXECUCAO))
+      // FINALIZADO também vem — a tela de Ocorrências mostra as encerradas
+      setTrocas(lista.filter(t => t.status === STATUS_ABERTO || t.status === STATUS_EM_EXECUCAO || t.status === STATUS_FINALIZADO))
       setPlacas(Object.fromEntries(veiculos.map(v => [v._id, v.placa ?? ''])))
       setErro(null)
     } catch (err) {
