@@ -1291,6 +1291,17 @@ export default function MovimentacaoPage() {
     }
   }
 
+  // O Bubble manda "contrato" como lista (main) ou objeto (live antigo).
+  // Contratos antigos da placa também vêm: prioriza o ATIVO, senão o mais recente.
+  function escolherContrato(raw: unknown): Record<string, unknown> | null {
+    const lista = (Array.isArray(raw) ? raw : [raw])
+      .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object' && !!(c as { _id?: string })._id)
+    if (!lista.length) return null
+    const ativo = lista.find((c) => String(c.status ?? '').toUpperCase() === 'ATIVO')
+    if (ativo) return ativo
+    return [...lista].sort((a, b) => String(b['Created Date'] ?? '').localeCompare(String(a['Created Date'] ?? '')))[0]
+  }
+
   async function consultarFuncoes(placaValue: string) {
     if (!placaValue.trim()) return
     setCarregandoFuncoes(true)
@@ -1306,13 +1317,14 @@ export default function MovimentacaoPage() {
     try {
       const data = await chamarBubble('consulta-veiculo-funcoes', { placa: placaValue.trim().toUpperCase() })
       const vistoriasRaw: Record<string, unknown>[] = data.response?.vistorias ?? []
-      setVeiculoFuncoes(data.response?.veiculo ? { ...data.response.veiculo, contrato: data.response.contrato, cliente: data.response.cliente } : null)
+      const contratoEscolhido = escolherContrato(data.response?.contrato)
+      setVeiculoFuncoes(data.response?.veiculo ? { ...data.response.veiculo, contrato: contratoEscolhido ?? undefined, cliente: data.response.cliente } : null)
       setVistoriasDisponiveis(vistoriasRaw.map((v) => v.nome as string))
       setVistoriasIncluir(data.response?.['vistorias-incluir'] ?? [])
       setVistoriasRetirar(data.response?.['vistorias-retirar'] ?? [])
       setPendenciasVeiculo(data.response?.pendencia ?? [])
       setPrevisaoRecolha(data.response?.['previsao-recolha'] ?? [])
-      const numeroContrato = (data.response?.contrato as { 'Numero ctr'?: number } | undefined)?.['Numero ctr']
+      const numeroContrato = (contratoEscolhido as { 'Numero ctr'?: number } | null)?.['Numero ctr']
       checarContratoAptoEntrega(placaValue, numeroContrato)
     } catch {
       setErro('Não foi possível consultar as funções disponíveis para esta placa.')
