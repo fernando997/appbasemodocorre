@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, LayoutDashboard, Bike, Activity, LogOut, ChevronDown, Check, Building2, KeyRound, AlertTriangle } from 'lucide-react'
+import { Home, LayoutDashboard, Bike, Activity, LogOut, ChevronDown, Check, Building2, KeyRound, AlertTriangle, FileSignature } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sidebar } from './sidebar'
 import { setUnidadeAtiva } from '@/lib/unidade-ativa'
+import { useContratosPendentes } from '@/lib/use-contratos-pendentes'
 
 type Unidade = { _id: string; 'Nome Unidade': string }
 
@@ -16,6 +17,7 @@ const navItems = [
   { href: '/recebimento', label: 'Recebimento', labelMobile: 'Receb.', icon: Bike },
   { href: '/movimentacao', label: 'Funções', labelMobile: 'Funções', icon: Activity },
   { href: '/ocorrencias', label: 'Ocorrências', labelMobile: 'Ocorr.', icon: AlertTriangle },
+  { href: '/contratos-pendentes', label: 'Contratos', labelMobile: 'Contr.', icon: FileSignature },
 ]
 
 type Plataforma = 'ios' | 'android' | 'outro'
@@ -32,6 +34,7 @@ function MobileNavBar({ plataforma }: { plataforma: Plataforma }) {
   const pathname = usePathname()
   const router = useRouter()
   const items = navItems
+  const contratosPendentes = useContratosPendentes()
 
   return (
     <nav className={cn(
@@ -46,7 +49,14 @@ function MobileNavBar({ plataforma }: { plataforma: Plataforma }) {
             onClick={() => router.push(href)}
             className="flex flex-col items-center justify-center flex-1 py-3 gap-1.5 transition-colors"
           >
-            <Icon className={cn('w-5 h-5 transition-colors', isAtivo ? 'text-[#6C63FF]' : 'text-[#8E92B3]')} />
+            <span className="relative flex">
+              <Icon className={cn('w-5 h-5 transition-colors', isAtivo ? 'text-[#6C63FF]' : 'text-[#8E92B3]')} />
+              {href === '/contratos-pendentes' && contratosPendentes > 0 && (
+                <span className="absolute -top-2 -right-3 min-w-4 h-4 px-1 rounded-full bg-[#4FB648] text-white text-[10px] font-bold leading-none flex items-center justify-center">
+                  {contratosPendentes}
+                </span>
+              )}
+            </span>
             <span className={cn('text-[10px] font-medium leading-none tracking-wide transition-colors', isAtivo ? 'text-[#6C63FF]' : 'text-[#8E92B3]')}>
               {labelMobile}
             </span>

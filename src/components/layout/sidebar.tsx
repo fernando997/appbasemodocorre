@@ -10,11 +10,13 @@ import {
   Bike,
   Activity,
   AlertTriangle,
+  FileSignature,
   X,
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { setUnidadeAtiva } from '@/lib/unidade-ativa'
+import { useContratosPendentes } from '@/lib/use-contratos-pendentes'
 
 type Unidade = { _id: string; 'Nome Unidade': string }
 
@@ -25,6 +27,7 @@ const navItems = [
   { href: '/recebimento', label: 'Recebimento de Motos', icon: Bike },
   { href: '/movimentacao', label: 'Funções', icon: Activity },
   { href: '/ocorrencias', label: 'Ocorrências', icon: AlertTriangle },
+  { href: '/contratos-pendentes', label: 'Contratos Pendentes', icon: FileSignature },
 ]
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -34,6 +37,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [unidadeAtiva, setUnidadeAtivaState] = useState<string>('todas')
+  const contratosPendentes = useContratosPendentes()
 
   useEffect(() => {
     try {
@@ -108,6 +112,11 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           >
             <Icon className="w-4 h-4 shrink-0" />
             {label}
+            {href === '/contratos-pendentes' && contratosPendentes > 0 && (
+              <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-[#4FB648] text-white text-[11px] font-bold flex items-center justify-center">
+                {contratosPendentes}
+              </span>
+            )}
           </Link>
         ))}
       </nav>

@@ -18,7 +18,7 @@ const ENDPOINTS_PUBLICOS = new Set([
 const ENDPOINTS_PERMITIDOS = new Set([
   ...ENDPOINTS_PUBLICOS,
   'achar-moto-base', 'achar-unidade', 'base_vistoria_disponibilidade', 'base-chamar-status',
-  'base-confirmar-recolha', 'base-consulta-parcelas', 'base-fechar-ocorrencia', 'base-permanece-com-locatario',
+  'base-confirmar-recolha', 'base-consulta-parcelas', 'base-contratos-pendentes', 'base-fechar-ocorrencia', 'base-permanece-com-locatario',
   'chamar-locadoras', 'chamar-recolhas-pendencias', 'chamar-veiculos',
   'check-in-base', 'confirmar-instalação', 'instalacao-motos', 'liberacao_veiculo', 'liberar_moto',
   'NOVO-bateria-abertas', 'NOVO-bateria-assumir', 'NOVO-bateria-finalizar', 'receber-moto',
