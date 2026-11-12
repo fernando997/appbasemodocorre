@@ -299,7 +299,7 @@ function BotoesOcorrencia({ o, acoes, className }: { o: Ocorrencia; acoes: Acoes
         <Eye className="w-3.5 h-3.5" /> Consultar
       </button>
       {o.status === 'NOVA' && (o.troca || o.manutencao || o.recolha?.ocorrencia) && (
-        <button disabled={ocupado} onClick={() => acoes.assumir(o)} className={cn(botao, 'flex-1 text-white bg-[#6C63FF] hover:bg-[#5A52E0]')}>
+        <button disabled={ocupado} onClick={() => acoes.assumir(o)} className={cn(botao, 'flex-1 text-white bg-[#3B82F6] hover:bg-[#2563EB]')}>
           {ocupado && <Loader2 className="w-3 h-3 animate-spin" />} Assumir
         </button>
       )}
@@ -316,7 +316,7 @@ function BotoesOcorrencia({ o, acoes, className }: { o: Ocorrencia; acoes: Acoes
 function LinkMapa({ href, label }: { href?: string; label: string }) {
   if (!href) return null
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-[#6C63FF] hover:underline">
+    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-[#3B82F6] hover:underline">
       <MapPin className="w-3 h-3" />
       {label}
     </a>
@@ -431,7 +431,7 @@ function ParcelasVencidas({ contratoId }: { contratoId: string }) {
                     href={p.url_pagamento}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-auto shrink-0 inline-flex items-center gap-1 pt-0.5 font-semibold text-[#6C63FF] hover:underline"
+                    className="ml-auto shrink-0 inline-flex items-center gap-1 pt-0.5 font-semibold text-[#3B82F6] hover:underline"
                   >
                     Pagar <ExternalLink className="w-3 h-3" />
                   </a>
@@ -822,7 +822,7 @@ export default function OcorrenciasPage() {
     setBusca('')
   }
 
-  const seletor = 'px-3 py-2 text-sm rounded-xl border border-[#E2E4F0] bg-white focus:outline-none focus:ring-2 focus:ring-[#6C63FF]/30'
+  const seletor = 'px-3 py-2 text-sm rounded-xl border border-[#E2E4F0] bg-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/30'
 
   return (
     <>
@@ -863,11 +863,11 @@ export default function OcorrenciasPage() {
                   t === 'TODAS' && 'col-span-2 sm:col-span-1',
                   ativo
                     ? 'bg-[#1B2043] border-[#1B2043] text-white shadow-[0_4px_12px_rgba(27,32,67,0.25)]'
-                    : 'bg-white border-transparent text-[#1B2043] shadow-[0_2px_12px_rgba(99,102,241,0.08)] hover:border-[#6C63FF]/40'
+                    : 'bg-white border-transparent text-[#1B2043] shadow-[0_2px_12px_rgba(99,102,241,0.08)] hover:border-[#3B82F6]/40'
                 )}
               >
                 <div className={cn('p-2 rounded-xl shrink-0', ativo ? 'bg-white/10' : 'bg-[#EEF0F8]')}>
-                  <Icon className={cn('w-4 h-4', ativo ? 'text-white' : t === 'TODAS' ? 'text-[#6C63FF]' : TIPOS[t].cor)} />
+                  <Icon className={cn('w-4 h-4', ativo ? 'text-white' : t === 'TODAS' ? 'text-[#3B82F6]' : TIPOS[t].cor)} />
                 </div>
                 <div className="min-w-0">
                   <p className={cn('text-xs truncate', ativo ? 'text-white/70' : 'text-muted-foreground')}>
@@ -888,7 +888,7 @@ export default function OcorrenciasPage() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar placa, motivo, modelo..."
-              className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-[#E2E4F0] focus:outline-none focus:ring-2 focus:ring-[#6C63FF]/30"
+              className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-[#E2E4F0] focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/30"
             />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex gap-2">
@@ -937,7 +937,7 @@ export default function OcorrenciasPage() {
         <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
           <span>{filtradas.length} ocorrência(s){temFiltro ? ' com os filtros aplicados' : ' em aberto'}</span>
           {temFiltro && (
-            <button onClick={limparFiltros} className="inline-flex items-center gap-1 text-[#6C63FF] hover:underline">
+            <button onClick={limparFiltros} className="inline-flex items-center gap-1 text-[#3B82F6] hover:underline">
               <X className="w-3 h-3" /> Limpar filtros
             </button>
           )}

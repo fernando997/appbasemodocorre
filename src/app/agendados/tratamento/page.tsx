@@ -39,7 +39,7 @@ type Registro = Record<string, unknown>
 
 // Classes literais (Tailwind precisa ver a string completa pra gerar o CSS)
 const CORES_BADGE = [
-  'bg-[#6C63FF]/10 text-[#6C63FF] border-[#6C63FF]/25',
+  'bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/25',
   'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/25',
   'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/25',
   'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/25',
@@ -476,7 +476,7 @@ export default function TratamentoPage() {
                         <tr key={item._id} className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${i % 2 !== 0 ? 'bg-muted/10' : ''}`}>
                           <td className="px-3 py-3.5">
                             <div className="flex items-center gap-2 font-mono font-medium text-sm">
-                              <Bike className="w-3.5 h-3.5 text-[#6C63FF] shrink-0" />
+                              <Bike className="w-3.5 h-3.5 text-[#3B82F6] shrink-0" />
                               {String(veiculo?.placa ?? '-')}
                             </div>
                           </td>

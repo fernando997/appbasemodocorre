@@ -126,7 +126,7 @@ export default function CheckinBasePage() {
                         <tr key={String(m._id ?? i)} className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${i % 2 !== 0 ? 'bg-muted/10' : ''}`}>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2 font-mono font-medium">
-                              <Bike className="w-3.5 h-3.5 text-[#6C63FF]" />
+                              <Bike className="w-3.5 h-3.5 text-[#3B82F6]" />
                               {String(m.placa ?? '-')}
                             </div>
                           </td>

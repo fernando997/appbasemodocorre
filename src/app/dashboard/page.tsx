@@ -183,7 +183,7 @@ export default function DashboardPage() {
           <div className="relative w-full h-10">
             <div className="absolute bottom-0 left-0 right-0 border-t-2 border-dashed border-[#1B2043]/15" />
             <Bike
-              className="absolute bottom-0 w-8 h-8 text-[#6C63FF]"
+              className="absolute bottom-0 w-8 h-8 text-[#3B82F6]"
               style={{ animation: 'moto-ride 1.8s ease-in-out infinite alternate' }}
             />
           </div>
@@ -195,7 +195,7 @@ export default function DashboardPage() {
 
           <div className="w-full h-1.5 rounded-full bg-[#1B2043]/10 overflow-hidden">
             <div
-              className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#1B2043] to-[#6C63FF]"
+              className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#1B2043] to-[#3B82F6]"
               style={{ animation: 'progress-indeterminate 1.4s ease-in-out infinite' }}
             />
           </div>
@@ -219,9 +219,9 @@ export default function DashboardPage() {
             <p className="text-muted-foreground text-xs">Total frota</p>
             <p className="font-bold text-base leading-tight">{total}</p>
           </div>
-          <div className="bg-[#6C63FF]/10 border border-[#6C63FF]/25 rounded-xl px-3 py-1.5 text-center">
-            <p className="text-[#6C63FF] text-xs">Atenção</p>
-            <p className="font-bold text-base leading-tight text-[#6C63FF]">{atencao}</p>
+          <div className="bg-[#3B82F6]/10 border border-[#3B82F6]/25 rounded-xl px-3 py-1.5 text-center">
+            <p className="text-[#3B82F6] text-xs">Atenção</p>
+            <p className="font-bold text-base leading-tight text-[#3B82F6]">{atencao}</p>
           </div>
           <button
             onClick={handleAtualizar}

@@ -50,14 +50,14 @@ const ETAPAS = [
 ]
 
 const STEP_THEMES = [
-  { color: '#6C63FF', name: 'purple' },
+  { color: '#3B82F6', name: 'purple' },
   { color: '#F97316', name: 'orange' },
   { color: '#3B82F6', name: 'blue' },
   { color: '#F59E0B', name: 'yellow' },
   { color: '#EC4899', name: 'pink' },
   { color: '#14B8A6', name: 'teal' },
   { color: '#8B5CF6', name: 'violet' },
-  { color: '#6C63FF', name: 'purple' },
+  { color: '#3B82F6', name: 'purple' },
   { color: '#22C55E', name: 'green' },
 ]
 
@@ -315,7 +315,7 @@ function VistoriaEntregaContent() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#080C1F] via-[#1B2043] to-[#2E4080] flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-[#6C63FF]" />
+          <Loader2 className="w-10 h-10 animate-spin text-[#3B82F6]" />
           <p className="text-sm text-white/60">Verificando rastreadores da moto...</p>
         </div>
       </div>
@@ -351,7 +351,7 @@ function VistoriaEntregaContent() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#080C1F] via-[#1B2043] to-[#2E4080] flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-[#6C63FF]" />
+          <Loader2 className="w-10 h-10 animate-spin text-[#3B82F6]" />
           <p className="text-sm text-white/60">Validando contrato...</p>
         </div>
       </div>
@@ -736,7 +736,7 @@ function VistoriaEntregaContent() {
                       ? '3px solid #22C55E'
                       : facialStatus === 'reprovado'
                         ? '3px solid #EF4444'
-                        : '3px solid #6C63FF',
+                        : '3px solid #3B82F6',
                   }}
                 />
                 {/* Approved checkmark overlay */}
@@ -751,7 +751,7 @@ function VistoriaEntregaContent() {
             ) : (
               <div
                 className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
-                style={{ border: '3px solid #6C63FF' }}
+                style={{ border: '3px solid #3B82F6' }}
               >
                 <video
                   ref={previewSelfieRef}
@@ -773,7 +773,7 @@ function VistoriaEntregaContent() {
               <div className="w-full space-y-2" style={{ animation: 'fadeInUp 0.3s ease-out' }}>
                 <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
                   {facialStep >= 1 ? (
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 1 ? 'bg-[#22C55E]' : 'bg-[#6C63FF] animate-pulse'}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 1 ? 'bg-[#22C55E]' : 'bg-[#3B82F6] animate-pulse'}`}>
                       {facialStep > 1 ? <CheckCircle2 className="w-3 h-3 text-white" /> : <Loader2 className="w-3 h-3 text-white animate-spin" />}
                     </div>
                   ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
@@ -781,7 +781,7 @@ function VistoriaEntregaContent() {
                 </div>
                 <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
                   {facialStep >= 2 ? (
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 2 ? 'bg-[#22C55E]' : 'bg-[#6C63FF] animate-pulse'}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${facialStep > 2 ? 'bg-[#22C55E]' : 'bg-[#3B82F6] animate-pulse'}`}>
                       {facialStep > 2 ? <CheckCircle2 className="w-3 h-3 text-white" /> : <Loader2 className="w-3 h-3 text-white animate-spin" />}
                     </div>
                   ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
@@ -789,7 +789,7 @@ function VistoriaEntregaContent() {
                 </div>
                 <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
                   {facialStep >= 3 ? (
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[#6C63FF] animate-pulse">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[#3B82F6] animate-pulse">
                       <Loader2 className="w-3 h-3 text-white animate-spin" />
                     </div>
                   ) : <div className="w-5 h-5 rounded-full bg-white/10" />}
@@ -1083,14 +1083,14 @@ function VistoriaEntregaContent() {
             key={etapaKey}
             className="rounded-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.2)] p-6 mx-4"
             style={{
-              background: 'linear-gradient(135deg, rgba(108,99,255,0.08), rgba(13,18,41,0.95), rgba(108,99,255,0.05))',
+              background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(13,18,41,0.95), rgba(59,130,246,0.05))',
               animation: 'cardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
             <div className="flex flex-col items-center gap-4">
               {enviando ? (
                 <>
-                  <Loader2 className="w-16 h-16 animate-spin text-[#6C63FF]" />
+                  <Loader2 className="w-16 h-16 animate-spin text-[#3B82F6]" />
                   <h2 className="text-xl font-bold text-white text-center animate-pulse">Gerando PDF...</h2>
                   <p className="text-sm text-white/60">Aguarde enquanto preparamos o relatorio.</p>
                 </>
@@ -1145,7 +1145,7 @@ function VistoriaEntregaContent() {
                 <div className="absolute w-36 h-36 rounded-full border border-[#22C55E]/25 animate-[pulse-ring_2.5s_ease-out_infinite]" />
                 <div className="absolute w-44 h-44 rounded-full border border-[#22C55E]/15 animate-[pulse-ring_3s_ease-out_infinite_0.5s]" />
                 {/* Confetti dots */}
-                <div className="absolute w-3 h-3 rounded-full bg-[#6C63FF] animate-[confetti-float_2s_ease-in-out_infinite]" style={{ top: '-8px', left: '20%' }} />
+                <div className="absolute w-3 h-3 rounded-full bg-[#3B82F6] animate-[confetti-float_2s_ease-in-out_infinite]" style={{ top: '-8px', left: '20%' }} />
                 <div className="absolute w-2 h-2 rounded-full bg-[#F59E0B] animate-[confetti-float_2.5s_ease-in-out_infinite_0.3s]" style={{ top: '10%', right: '-4px' }} />
                 <div className="absolute w-3 h-3 rounded-full bg-[#EC4899] animate-[confetti-float_2s_ease-in-out_infinite_0.6s]" style={{ bottom: '5%', left: '-8px' }} />
                 <div className="absolute w-2 h-2 rounded-full bg-[#3B82F6] animate-[confetti-float_2.2s_ease-in-out_infinite_0.9s]" style={{ bottom: '-4px', right: '25%' }} />
@@ -1169,7 +1169,7 @@ function VistoriaEntregaContent() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#080C1F] via-[#1B2043] to-[#2E4080] flex flex-col relative overflow-hidden">
       {/* Decorative blurs */}
-      <div className="fixed top-[-20%] left-[-10%] w-[50vw] h-[50vw] rounded-full opacity-30 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(108,99,255,0.3), transparent 70%)' }} />
+      <div className="fixed top-[-20%] left-[-10%] w-[50vw] h-[50vw] rounded-full opacity-30 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.3), transparent 70%)' }} />
       <div className="fixed bottom-[-15%] right-[-10%] w-[45vw] h-[45vw] rounded-full opacity-25 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.25), transparent 70%)' }} />
 
       <style>{`
@@ -1203,9 +1203,9 @@ function VistoriaEntregaContent() {
           100% { top: 0%; }
         }
         @keyframes scan-border {
-          0% { border-color: rgba(108,99,255,0.3); }
-          50% { border-color: rgba(108,99,255,0.8); }
-          100% { border-color: rgba(108,99,255,0.3); }
+          0% { border-color: rgba(59,130,246,0.3); }
+          50% { border-color: rgba(59,130,246,0.8); }
+          100% { border-color: rgba(59,130,246,0.3); }
         }
         @keyframes shakeX {
           0%, 100% { transform: translateX(0); }
@@ -1222,7 +1222,7 @@ function VistoriaEntregaContent() {
         <div className="sticky top-0 z-50 bg-gradient-to-b from-[#0D1229]/95 to-[#0D1229]/80 backdrop-blur-2xl border-b border-white/[0.08] px-4 pt-3 pb-3" style={{ animation: 'fadeIn 0.3s ease-out' }}>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#6C63FF]/20 to-[#22C55E]/20 border border-white/10 flex items-center justify-center overflow-hidden">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#3B82F6]/20 to-[#22C55E]/20 border border-white/10 flex items-center justify-center overflow-hidden">
                 <img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" />
               </div>
               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#22C55E] border-2 border-[#0D1229]" />
@@ -1234,7 +1234,7 @@ function VistoriaEntregaContent() {
               <span className="text-[10px] uppercase tracking-[0.15em] text-[#8E92B3] font-medium">Vistoria de Entrega</span>
             </div>
             <div className="ml-auto flex flex-col items-end gap-1.5">
-              <Badge className="bg-gradient-to-r from-[#6C63FF]/20 to-[#6C63FF]/10 text-[#A5A0FF] border-[#6C63FF]/25 hover:bg-[#6C63FF]/30 text-[11px] font-bold tracking-wider px-2.5 py-0.5">{placa.toUpperCase()}</Badge>
+              <Badge className="bg-gradient-to-r from-[#3B82F6]/20 to-[#3B82F6]/10 text-[#93C5FD] border-[#3B82F6]/25 hover:bg-[#3B82F6]/30 text-[11px] font-bold tracking-wider px-2.5 py-0.5">{placa.toUpperCase()}</Badge>
               <Badge className="bg-gradient-to-r from-[#22C55E]/15 to-[#22C55E]/5 text-[#4ADE80] border-[#22C55E]/20 hover:bg-[#22C55E]/25 text-[10px] font-medium px-2 py-0">Contrato #{contrato}</Badge>
             </div>
           </div>
@@ -1292,8 +1292,8 @@ export default function Page() {
     <Suspense fallback={
       <div className="min-h-screen bg-gradient-to-b from-[#080C1F] via-[#1B2043] to-[#2E4080] flex items-center justify-center">
         <div className="relative">
-          <Loader2 className="w-10 h-10 animate-spin text-[#6C63FF]" />
-          <div className="absolute inset-0 w-10 h-10 rounded-full shadow-[0_0_20px_rgba(108,99,255,0.4)]" />
+          <Loader2 className="w-10 h-10 animate-spin text-[#3B82F6]" />
+          <div className="absolute inset-0 w-10 h-10 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.4)]" />
         </div>
       </div>
     }>

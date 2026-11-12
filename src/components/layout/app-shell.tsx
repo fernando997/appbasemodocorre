@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, LayoutDashboard, Bike, Activity, LogOut, ChevronDown, Check, Building2, KeyRound, AlertTriangle, FileSignature } from 'lucide-react'
+import { Home, LayoutDashboard, Bike, Activity, LogOut, ChevronDown, Check, Building2, KeyRound, AlertTriangle, FileSignature, ShoppingCart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sidebar } from './sidebar'
 import { setUnidadeAtiva } from '@/lib/unidade-ativa'
 import { useContratosPendentes } from '@/lib/use-contratos-pendentes'
+import { podeSolicitarCompra } from '@/lib/permissoes'
 
 type Unidade = { _id: string; 'Nome Unidade': string }
 
@@ -18,6 +19,7 @@ const navItems = [
   { href: '/movimentacao', label: 'Funções', labelMobile: 'Funções', icon: Activity },
   { href: '/ocorrencias', label: 'Ocorrências', labelMobile: 'Ocorr.', icon: AlertTriangle },
   { href: '/contratos-pendentes', label: 'Contratos', labelMobile: 'Contr.', icon: FileSignature },
+  { href: '/solicitar-compra', label: 'Solicitar Compra', labelMobile: 'Compra', icon: ShoppingCart },
 ]
 
 type Plataforma = 'ios' | 'android' | 'outro'
@@ -33,7 +35,9 @@ function detectarPlataforma(): Plataforma {
 function MobileNavBar({ plataforma }: { plataforma: Plataforma }) {
   const pathname = usePathname()
   const router = useRouter()
-  const items = navItems
+  // Só monta no cliente (depois de detectar a plataforma), então pode ler o localStorage direto
+  const [podeCompra] = useState(podeSolicitarCompra)
+  const items = navItems.filter((i) => i.href !== '/solicitar-compra' || podeCompra)
   const contratosPendentes = useContratosPendentes()
 
   return (
@@ -50,14 +54,14 @@ function MobileNavBar({ plataforma }: { plataforma: Plataforma }) {
             className="flex flex-col items-center justify-center flex-1 py-3 gap-1.5 transition-colors"
           >
             <span className="relative flex">
-              <Icon className={cn('w-5 h-5 transition-colors', isAtivo ? 'text-[#6C63FF]' : 'text-[#8E92B3]')} />
+              <Icon className={cn('w-5 h-5 transition-colors', isAtivo ? 'text-[#60A5FA]' : 'text-[#8E92B3]')} />
               {href === '/contratos-pendentes' && contratosPendentes > 0 && (
                 <span className="absolute -top-2 -right-3 min-w-4 h-4 px-1 rounded-full bg-[#4FB648] text-white text-[10px] font-bold leading-none flex items-center justify-center">
                   {contratosPendentes}
                 </span>
               )}
             </span>
-            <span className={cn('text-[10px] font-medium leading-none tracking-wide transition-colors', isAtivo ? 'text-[#6C63FF]' : 'text-[#8E92B3]')}>
+            <span className={cn('text-[10px] font-medium leading-none tracking-wide transition-colors', isAtivo ? 'text-[#60A5FA]' : 'text-[#8E92B3]')}>
               {labelMobile}
             </span>
           </button>
@@ -96,9 +100,9 @@ function UnidadeDropdown({ unidades, unidadeAtiva, onTrocar }: {
     <div ref={ref} className="relative mt-1">
       <button
         onClick={() => setAberto((v) => !v)}
-        className="flex items-center gap-1.5 pl-2 pr-2 py-1 rounded-full bg-[#262B59]/80 border border-[#353C6B] text-[#C5C8E4] text-xs transition-colors hover:bg-[#262B59] hover:border-[#6C63FF] max-w-[180px]"
+        className="flex items-center gap-1.5 pl-2 pr-2 py-1 rounded-full bg-[#262B59]/80 border border-[#353C6B] text-[#C5C8E4] text-xs transition-colors hover:bg-[#262B59] hover:border-[#60A5FA] max-w-[180px]"
       >
-        <Building2 className="w-3 h-3 text-[#6C63FF] shrink-0" />
+        <Building2 className="w-3 h-3 text-[#60A5FA] shrink-0" />
         <span className="truncate">{labelAtiva}</span>
         <ChevronDown className={cn('w-3 h-3 text-[#8E92B3] shrink-0 transition-transform', aberto && 'rotate-180')} />
       </button>
@@ -116,12 +120,12 @@ function UnidadeDropdown({ unidades, unidadeAtiva, onTrocar }: {
                   className={cn(
                     'flex items-center gap-2.5 w-full px-3 py-2.5 text-xs text-left transition-colors',
                     ativo
-                      ? 'bg-[#6C63FF]/20 text-[#6C63FF]'
+                      ? 'bg-[#3B82F6]/40 text-[#60A5FA]'
                       : 'text-[#C5C8E4] hover:bg-[#262B59] hover:text-slate-100'
                   )}
                 >
                   <span className="w-4 shrink-0">
-                    {ativo && <Check className="w-3.5 h-3.5 text-[#6C63FF]" />}
+                    {ativo && <Check className="w-3.5 h-3.5 text-[#60A5FA]" />}
                   </span>
                   <span className="truncate">{label}</span>
                 </button>

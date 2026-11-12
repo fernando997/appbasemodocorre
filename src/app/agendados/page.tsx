@@ -35,7 +35,7 @@ export default function AgendadosPage() {
                 <p className="font-semibold text-base">{label}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{desc}</p>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground/50 shrink-0 group-hover:text-[#6C63FF] group-hover:translate-x-0.5 transition-all" />
+              <ChevronRight className="w-5 h-5 text-muted-foreground/50 shrink-0 group-hover:text-[#3B82F6] group-hover:translate-x-0.5 transition-all" />
             </button>
           ))}
         </div>

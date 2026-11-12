@@ -158,7 +158,7 @@ export default function LoginPage() {
     return `(${valor.slice(0, 2)}) ${valor.slice(2, 7)}-${valor.slice(7, 11)}`
   }
 
-  const inputClass = 'w-full pl-10 pr-4 py-3 text-sm border border-white/20 rounded-xl bg-white/10 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#6C63FF]/50 focus:border-[#6C63FF]/60 disabled:opacity-50 transition-all'
+  const inputClass = 'w-full pl-10 pr-4 py-3 text-sm border border-white/20 rounded-xl bg-white/10 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#60A5FA]/50 focus:border-[#60A5FA]/60 disabled:opacity-50 transition-all'
 
   return (
     <div className="min-h-screen flex bg-gradient-to-r from-[#080C1F] via-[#1B2043] to-[#2E4080]">

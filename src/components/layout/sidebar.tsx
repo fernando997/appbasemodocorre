@@ -11,12 +11,14 @@ import {
   Activity,
   AlertTriangle,
   FileSignature,
+  ShoppingCart,
   X,
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { setUnidadeAtiva } from '@/lib/unidade-ativa'
 import { useContratosPendentes } from '@/lib/use-contratos-pendentes'
+import { podeSolicitarCompra } from '@/lib/permissoes'
 
 type Unidade = { _id: string; 'Nome Unidade': string }
 
@@ -28,6 +30,7 @@ const navItems = [
   { href: '/movimentacao', label: 'Funções', icon: Activity },
   { href: '/ocorrencias', label: 'Ocorrências', icon: AlertTriangle },
   { href: '/contratos-pendentes', label: 'Contratos Pendentes', icon: FileSignature },
+  { href: '/solicitar-compra', label: 'Solicitar Compra', icon: ShoppingCart },
 ]
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -37,10 +40,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [unidadeAtiva, setUnidadeAtivaState] = useState<string>('todas')
+  const [podeCompra, setPodeCompra] = useState(false)
   const contratosPendentes = useContratosPendentes()
 
   useEffect(() => {
     try {
+      setPodeCompra(podeSolicitarCompra())
       const user = JSON.parse(localStorage.getItem('mc_user') ?? '{}')
       const tipo = user?.Tipo ?? ''
       const raw: Unidade[] = JSON.parse(localStorage.getItem('mc_unidades') ?? '[]')
@@ -98,7 +103,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       <nav className="flex-1 px-3 py-5 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => (
+        {navItems.filter((i) => i.href !== '/solicitar-compra' || podeCompra).map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
@@ -106,7 +111,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
               pathname === href
-                ? 'bg-[#6C63FF] text-white shadow-[0_4px_12px_rgba(108,99,255,0.35)]'
+                ? 'bg-[#3B82F6] text-white shadow-[0_4px_12px_rgba(59,130,246,0.35)]'
                 : 'text-[#8E92B3] hover:bg-[#262B59] hover:text-slate-100'
             )}
           >
@@ -128,7 +133,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             <select
               value={unidadeAtiva}
               onChange={(e) => trocarUnidade(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs rounded-lg bg-[#262B59] border border-[#353C6B] text-[#C5C8E4] focus:outline-none focus:border-[#6C63FF]"
+              className="w-full px-2 py-1.5 text-xs rounded-lg bg-[#262B59] border border-[#353C6B] text-[#C5C8E4] focus:outline-none focus:border-[#60A5FA]"
             >
               <option value="todas">Todas as unidades</option>
               {unidades.map((u) => (

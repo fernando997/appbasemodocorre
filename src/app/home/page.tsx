@@ -7,7 +7,7 @@ import { LayoutDashboard, Bike, Activity, ChevronRight, KeyRound } from 'lucide-
 type UserInfo = { nome: string; tipo: string }
 
 const atalhos = [
-  { href: '/dashboard', label: 'Dashboard', desc: 'Visão geral da frota', icon: LayoutDashboard, cor: 'bg-[#6C63FF]' },
+  { href: '/dashboard', label: 'Dashboard', desc: 'Visão geral da frota', icon: LayoutDashboard, cor: 'bg-[#3B82F6]' },
   { href: '/recebimento', label: 'Recebimento', desc: 'Motos em trânsito e fila', icon: Bike, cor: 'bg-[#FF8C42]' },
   { href: '/movimentacao', label: 'Funções', desc: 'Consultar status por placa', icon: Activity, cor: 'bg-[#3B82F6]' },
   { href: '/liberacao-cpf', label: 'Liberação de Veículos', desc: 'Buscar por CPF e placa', icon: KeyRound, cor: 'bg-[#22C55E]' },
@@ -55,7 +55,7 @@ export default function HomePage() {
                 <p className="font-semibold text-base group-hover:text-foreground">{label}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{desc}</p>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground/50 shrink-0 group-hover:text-[#6C63FF] group-hover:translate-x-0.5 transition-all" />
+              <ChevronRight className="w-5 h-5 text-muted-foreground/50 shrink-0 group-hover:text-[#3B82F6] group-hover:translate-x-0.5 transition-all" />
             </button>
           ))}
         </div>

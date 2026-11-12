@@ -89,7 +89,7 @@ export default function ContratosPendentesPage() {
       <div className="px-4 sm:px-8 py-4 sm:py-6">
         {carregando ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-            <Loader2 className="w-8 h-8 animate-spin text-[#6C63FF]" />
+            <Loader2 className="w-8 h-8 animate-spin text-[#3B82F6]" />
             <p className="text-sm">Buscando contratos...</p>
           </div>
         ) : erro ? (
@@ -125,20 +125,20 @@ export default function ContratosPendentesPage() {
 
                     <div className="mt-4 space-y-2 text-sm">
                       <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-[#6C63FF] shrink-0" />
+                        <User className="w-4 h-4 text-[#3B82F6] shrink-0" />
                         <span className="truncate">{cl?.nome_completo ?? '-'}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Hash className="w-4 h-4 text-[#6C63FF] shrink-0" />
+                        <Hash className="w-4 h-4 text-[#3B82F6] shrink-0" />
                         <span>Contrato <span className="font-mono font-medium">{c['Numero ctr'] ?? '-'}</span></span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <CalendarClock className="w-4 h-4 text-[#6C63FF] shrink-0" />
+                        <CalendarClock className="w-4 h-4 text-[#3B82F6] shrink-0" />
                         <span>Início {fmtDataHora(c.inicio)}</span>
                       </div>
                       {c.tipo_de_entrega && (
                         <div className="flex items-center gap-2">
-                          <Truck className="w-4 h-4 text-[#6C63FF] shrink-0" />
+                          <Truck className="w-4 h-4 text-[#3B82F6] shrink-0" />
                           <span>{c.tipo_de_entrega}</span>
                         </div>
                       )}

@@ -171,7 +171,7 @@ function GlassPanel({ children, delay = 0, className = '' }: { children: React.R
     <div
       className="rounded-2xl p-[1px]"
       style={{
-        background: 'linear-gradient(135deg, rgba(27,32,67,0.22), rgba(108,99,255,0.08) 45%, transparent 75%)',
+        background: 'linear-gradient(135deg, rgba(27,32,67,0.22), rgba(59,130,246,0.08) 45%, transparent 75%)',
         animation: `cardEnter 0.5s cubic-bezier(0.16,1,0.3,1) ${delay}ms both`,
       }}
     >

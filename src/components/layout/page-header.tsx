@@ -67,9 +67,9 @@ export function PageHeader({ title, description, icon, iconColor = 'bg-[#1B2043]
         <div ref={ref} className="relative shrink-0">
           <button
             onClick={() => setAberto((v) => !v)}
-            className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-muted/60 hover:bg-muted transition-colors border border-transparent hover:border-[#6C63FF]/20"
+            className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-muted/60 hover:bg-muted transition-colors border border-transparent hover:border-[#3B82F6]/20"
           >
-            <UserCircle className="w-5 h-5 text-[#6C63FF] shrink-0" />
+            <UserCircle className="w-5 h-5 text-[#3B82F6] shrink-0" />
             <span className="hidden sm:inline text-sm font-semibold leading-none">{user.nome.split(' ')[0]}</span>
             <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-150 ${aberto ? 'rotate-180' : ''}`} />
           </button>
@@ -82,11 +82,11 @@ export function PageHeader({ title, description, icon, iconColor = 'bg-[#1B2043]
               </div>
               <div className="px-5 py-4">
                 {isAdmin ? (
-                  <div className="flex items-center gap-3 bg-[#6C63FF]/10 border border-[#6C63FF]/25 rounded-xl px-4 py-3">
-                    <Building2 className="w-4 h-4 text-[#6C63FF] shrink-0" />
+                  <div className="flex items-center gap-3 bg-[#3B82F6]/10 border border-[#3B82F6]/25 rounded-xl px-4 py-3">
+                    <Building2 className="w-4 h-4 text-[#3B82F6] shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-[#6C63FF]">Admin</p>
-                      <p className="text-xs text-[#6C63FF]/70 mt-0.5">{user.unidades.length} unidades</p>
+                      <p className="text-sm font-semibold text-[#3B82F6]">Admin</p>
+                      <p className="text-xs text-[#3B82F6]/70 mt-0.5">{user.unidades.length} unidades</p>
                     </div>
                   </div>
                 ) : (

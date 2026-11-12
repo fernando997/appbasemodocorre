@@ -373,15 +373,15 @@ export default function TesteCameraPage() {
         {modo === 'selfie' && (
           <div
             className="rounded-2xl p-[1px]"
-            style={{ background: 'linear-gradient(135deg, #6C63FF60, transparent 50%, #6C63FF30)' }}
+            style={{ background: 'linear-gradient(135deg, #3B82F660, transparent 50%, #3B82F630)' }}
           >
             <div className="bg-[#0D1229] rounded-2xl p-6 flex flex-col items-center gap-4">
               <div className="relative">
                 <div
                   className="w-20 h-20 rounded-3xl flex items-center justify-center"
-                  style={{ backgroundColor: '#6C63FF20', boxShadow: '0 0 30px #6C63FF25' }}
+                  style={{ backgroundColor: '#3B82F620', boxShadow: '0 0 30px #3B82F625' }}
                 >
-                  <Camera className="w-10 h-10" style={{ color: '#6C63FF' }} />
+                  <Camera className="w-10 h-10" style={{ color: '#3B82F6' }} />
                 </div>
               </div>
               <div className="text-center">
@@ -392,14 +392,14 @@ export default function TesteCameraPage() {
               {fotoResultado ? (
                 <div
                   className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
-                  style={{ border: '3px solid #6C63FF', boxShadow: '0 0 25px rgba(108,99,255,0.3)' }}
+                  style={{ border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' }}
                 >
                   <img src={fotoResultado.url} alt="Selfie capturada" className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div
                   className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
-                  style={cameraAtiva ? { border: '3px solid #6C63FF', boxShadow: '0 0 25px rgba(108,99,255,0.3)' } : undefined}
+                  style={cameraAtiva ? { border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' } : undefined}
                 >
                   <video ref={previewRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
                   {!cameraAtiva && (
@@ -527,7 +527,7 @@ export default function TesteCameraPage() {
           {modo === 'foto' ? (
             <div
               className="relative w-56 aspect-[3/4] rounded-full overflow-hidden bg-black"
-              style={cameraAtiva ? { border: '3px solid #6C63FF', boxShadow: '0 0 25px rgba(108,99,255,0.3)' } : undefined}
+              style={cameraAtiva ? { border: '3px solid #3B82F6', boxShadow: '0 0 25px rgba(59,130,246,0.3)' } : undefined}
             >
               <video
                 ref={previewRef}

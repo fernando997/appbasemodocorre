@@ -295,7 +295,7 @@ function LiberacaoCpfContent() {
           <div className="grid sm:grid-cols-[1fr_auto] gap-6 items-start">
             <div className="space-y-4 min-w-0">
               <div className="flex items-center gap-3">
-                <Search className="w-6 h-6 text-[#6C63FF]" />
+                <Search className="w-6 h-6 text-[#3B82F6]" />
                 <h2 className="text-xl font-bold">Busca de Veículos</h2>
               </div>
               <p className="text-sm text-muted-foreground">
@@ -345,7 +345,7 @@ function LiberacaoCpfContent() {
                     onKeyDown={(e) => e.key === 'Enter' && consultar()}
                     placeholder="Digite o CPF"
                     disabled={consultando}
-                    className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-[#6C63FF]/30 disabled:opacity-50"
+                    className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/30 disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -359,7 +359,7 @@ function LiberacaoCpfContent() {
                       placeholder={lendoPlaca ? 'Analisando...' : 'Digite a Placa'}
                       maxLength={8}
                       disabled={consultando || lendoPlaca}
-                      className="flex-1 min-w-0 px-3 py-2 text-sm font-mono uppercase border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-[#6C63FF]/30 disabled:opacity-50"
+                      className="flex-1 min-w-0 px-3 py-2 text-sm font-mono uppercase border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/30 disabled:opacity-50"
                     />
                     {foto && (
                       <Button
@@ -388,7 +388,7 @@ function LiberacaoCpfContent() {
                   {foto ? 'Nova foto' : 'Foto da placa'}
                 </Button>
                 <Button
-                  className="flex-1 bg-[#6C63FF] hover:brightness-110"
+                  className="flex-1 bg-[#3B82F6] hover:brightness-110"
                   onClick={() => consultar()}
                   disabled={consultando || lendoPlaca || !placa.trim() || !cpf.trim()}
                 >
@@ -418,10 +418,10 @@ function LiberacaoCpfContent() {
               <Separator />
               <div className="space-y-4">
                 {resultado.contrato ? (
-                  <div className="rounded-xl border-l-4 border-l-[#6C63FF] bg-[#6C63FF]/5 px-4 py-3 space-y-2">
+                  <div className="rounded-xl border-l-4 border-l-[#3B82F6] bg-[#3B82F6]/5 px-4 py-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="font-semibold text-lg">Contrato Nº {String(resultado.contrato['Numero ctr'] ?? '-')}</p>
-                      <Badge className="bg-[#6C63FF]/20 text-[#6C63FF] border-[#6C63FF]/25">
+                      <Badge className="bg-[#3B82F6]/20 text-[#3B82F6] border-[#3B82F6]/25">
                         {String(resultado.contrato['status'] ?? '-')}
                       </Badge>
                     </div>
@@ -436,17 +436,17 @@ function LiberacaoCpfContent() {
                 )}
 
                 {validacao && (
-                  <div className={`rounded-lg px-3 py-2.5 border ${validacao.podeLiberar ? 'bg-[#6C63FF]/5 border-[#6C63FF]/20' : 'bg-red-50 border-red-200'}`}>
+                  <div className={`rounded-lg px-3 py-2.5 border ${validacao.podeLiberar ? 'bg-[#3B82F6]/5 border-[#3B82F6]/20' : 'bg-red-50 border-red-200'}`}>
                     <div className="flex items-center gap-1.5">
                       {validacao.podeLiberar ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4 text-[#6C63FF]" />
-                          <span className="text-sm font-semibold text-[#6C63FF]">Liberado</span>
+                          <CheckCircle2 className="w-4 h-4 text-[#3B82F6]" />
+                          <span className="text-sm font-semibold text-[#3B82F6]">Liberado</span>
                         </>
                       ) : validacao.carregando && validacao.motivos.length === 0 ? (
                         <>
-                          <Loader2 className="w-4 h-4 text-[#6C63FF] animate-spin" />
-                          <span className="text-sm font-semibold text-[#6C63FF]">Verificando rastreador...</span>
+                          <Loader2 className="w-4 h-4 text-[#3B82F6] animate-spin" />
+                          <span className="text-sm font-semibold text-[#3B82F6]">Verificando rastreador...</span>
                         </>
                       ) : (
                         <>
@@ -509,7 +509,7 @@ function LiberacaoCpfContent() {
                   </Button>
                   {validacao?.podeLiberar && (
                     <Button
-                      className="flex-1 bg-[#6C63FF] hover:brightness-110"
+                      className="flex-1 bg-[#3B82F6] hover:brightness-110"
                       onClick={confirmarLiberacao}
                       disabled={liberando}
                     >
@@ -529,11 +529,11 @@ function LiberacaoCpfContent() {
             <>
               <Separator />
               <div className="space-y-4">
-                <div className="flex items-center gap-3 bg-[#6C63FF]/5 border border-[#6C63FF]/20 rounded-lg px-4 py-3">
-                  <CheckCircle2 className="w-6 h-6 text-[#6C63FF] shrink-0" />
+                <div className="flex items-center gap-3 bg-[#3B82F6]/5 border border-[#3B82F6]/20 rounded-lg px-4 py-3">
+                  <CheckCircle2 className="w-6 h-6 text-[#3B82F6] shrink-0" />
                   <div>
-                    <p className="font-semibold text-[#6C63FF]">Moto liberada com sucesso</p>
-                    <p className="text-xs text-[#6C63FF]">
+                    <p className="font-semibold text-[#3B82F6]">Moto liberada com sucesso</p>
+                    <p className="text-xs text-[#3B82F6]">
                       Operador: <span className="font-medium">{liberado.operador}</span> — {liberado.hora}
                     </p>
                   </div>
@@ -545,7 +545,7 @@ function LiberacaoCpfContent() {
                     Contrato: {String(liberado.resultado.contrato?.['Numero ctr'] ?? '-')}
                   </p>
                 </div>
-                <Button className="w-full bg-[#6C63FF] hover:brightness-110" onClick={novaConsulta}>
+                <Button className="w-full bg-[#3B82F6] hover:brightness-110" onClick={novaConsulta}>
                   Nova Liberação
                 </Button>
               </div>

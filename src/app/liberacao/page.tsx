@@ -22,7 +22,7 @@ type Agendado = {
 
 // Classes literais (Tailwind precisa ver a string completa pra gerar o CSS)
 const CORES_BADGE = [
-  'bg-[#6C63FF]/15 text-[#A5A0FF] border-[#6C63FF]/30',
+  'bg-[#3B82F6]/15 text-[#93C5FD] border-[#3B82F6]/30',
   'bg-[#22C55E]/15 text-[#6EE7A0] border-[#22C55E]/30',
   'bg-[#F59E0B]/15 text-[#FBBF6B] border-[#F59E0B]/30',
   'bg-[#EF4444]/15 text-[#FB9494] border-[#EF4444]/30',
@@ -142,12 +142,12 @@ export default function LiberacaoPage() {
                   key={item._id}
                   className="flex items-center gap-6 bg-white/5 border border-white/10 rounded-2xl px-8 py-6 backdrop-blur-sm hover:bg-white/10 transition-colors"
                 >
-                  <div className="w-14 h-14 rounded-full bg-[#6C63FF] flex items-center justify-center text-2xl font-bold shrink-0">
+                  <div className="w-14 h-14 rounded-full bg-[#3B82F6] flex items-center justify-center text-2xl font-bold shrink-0">
                     {i + 1}
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0 w-56">
-                    <Bike className="w-8 h-8 text-[#6C63FF] shrink-0" />
+                    <Bike className="w-8 h-8 text-[#3B82F6] shrink-0" />
                     <span className="font-mono font-bold text-3xl tracking-wide">{String(veiculo?.placa ?? '-')}</span>
                   </div>
 
