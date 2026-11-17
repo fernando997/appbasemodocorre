@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ShoppingCart, Wrench, Percent, Receipt, MoreHorizontal, Plus, Trash2, Check, ChevronLeft, ChevronRight,
-  Send, Loader2, RefreshCw, Upload, X, FileText, Clock, AlertTriangle, Pencil, Ban, RotateCcw, ExternalLink,
+  Send, Loader2, RefreshCw, Upload, X, FileText, Clock, AlertTriangle, Pencil, Ban, RotateCcw, ExternalLink, Truck,
 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
@@ -13,7 +13,7 @@ import { podeSolicitarCompra } from '@/lib/permissoes'
 // base-solicitacao-compra-* e sobe os arquivos pelo /api/upload-foto.
 
 // Versão do Bubble chamada (false = live)
-const VERSAO_BUBBLE: boolean | string = '53lgt'
+const VERSAO_BUBBLE: boolean | string = false
 const INTERVALO_MS = 15_000
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,7 +48,7 @@ type Solicitacao = {
   itens?: string
   quantidade?: number
   valor_estimado?: number
-  urgente?: boolean
+  urgente?: boolean | string
   data_limite?: string
   vencimento_boleto?: string
   data_status?: string
@@ -63,7 +63,7 @@ type Solicitacao = {
   unidade_nome?: string
   frota?: string
   frota_nome?: string
-  da_unidade?: boolean
+  da_unidade?: boolean | string
   onde_comprar?: string
   forma_pagamento?: string
   pix_chave?: string
@@ -73,11 +73,12 @@ type Solicitacao = {
   despesa_numero?: number
 }
 
+type ItemSalvo = { descricao?: string; quantidade?: number; valor_unitario?: number; link?: string; frete?: boolean }
 type Arquivo = { k: number; nome: string; url?: string; st: 'up' | 'ok' | 'er' }
 type Item = { k: number; ds: string; q: string; v: string; lk: string }
 type Form = {
   tp: string; ui: string; fi: string; du: boolean; oc: string
-  it: Item[]; fp: string; px: string; lp: string; vb: string; dl: string; urg: boolean
+  it: Item[]; fe: string; fp: string; px: string; lp: string; vb: string; dl: string; urg: boolean
   obs: string; arq: Arquivo[]; fot: Arquivo[]
 }
 type Erros = Record<string, string>
@@ -120,6 +121,9 @@ function stK(s?: string): string {
 // Em serviço, comissão e reembolso quem recebe é uma pessoa, não uma loja
 function recebePessoa(tp: string) { return tp === 'Serviço' || tp === 'Comissão' || tp === 'Reembolso' }
 
+// Como no Bubble (Main): sim ou não da lista pode vir como "sim"/"não", "yes"/"no" ou booleano
+function ehSim(v: unknown) { const t = String(v ?? '').trim().toLowerCase(); return t === 'sim' || t === 'yes' || t === 'true' }
+
 // ── Números e datas ──────────────────────────────────────────────────────
 
 function numB(s: string): number {
@@ -132,6 +136,8 @@ function numB(s: string): number {
 function r2(n: number) { return Math.round((Number(n) || 0) * 100) / 100 }
 function qN(x: Item) { return Math.max(0, Math.floor(numB(x.q))) }
 function vN(x: Item) { return r2(numB(x.v)) }
+// Frete: o que a loja cobra para entregar. Soma no total e não é item
+function feN(F: Form) { return r2(numB(F.fe)) }
 function moeda(n: number) { return (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
 function mascV(s: string) {
   const dg = s.replace(/\D/g, '').replace(/^0+(?=\d{3})/, '')
@@ -268,7 +274,7 @@ function pixMostra(p: Pix | null) {
 let seq = 1
 function novoItem(): Item { return { k: seq++, ds: '', q: '1', v: '', lk: '' } }
 function novoForm(): Form {
-  return { tp: 'Compra', ui: '', fi: '', du: false, oc: '', it: [novoItem()], fp: '', px: '', lp: '', vb: '', dl: '', urg: false, obs: '', arq: [], fot: [] }
+  return { tp: 'Compra', ui: '', fi: '', du: false, oc: '', it: [novoItem()], fe: '', fp: '', px: '', lp: '', vb: '', dl: '', urg: false, obs: '', arq: [], fot: [] }
 }
 
 function valida(F: Form, passo: number, editando: boolean, dl0: string): Erros {
@@ -308,9 +314,10 @@ function montaBody(F: Form, id: string | null, reenvio: string | null, usuario: 
     const o: Record<string, unknown> = { descricao: x.ds.trim().replace(/\s+/g, ' '), quantidade: qN(x), valor_unitario: vN(x) }
     const l = normLink(x.lk)
     if (l) o.link = l
-    return o as { descricao: string; quantidade: number; valor_unitario: number; link?: string }
+    return o as { descricao: string; quantidade: number; valor_unitario: number; link?: string; frete?: boolean }
   })
   const total = r2(its.reduce((s, x) => s + x.quantidade * x.valor_unitario, 0))
+  const fe = feN(F)
   let ds: string, q: number, v: number, lk: string
   if (its.length === 1) {
     ds = its[0].descricao; q = its[0].quantidade; v = its[0].valor_unitario; lk = its[0].link ?? ''
@@ -318,6 +325,12 @@ function montaBody(F: Form, id: string | null, reenvio: string | null, usuario: 
     ds = `${its.length} itens: ${its.map((x) => x.descricao).join(', ')}`
     if (ds.length > 120) ds = ds.slice(0, 119).replace(/[\s,]+$/, '') + '…'
     q = 1; v = total; lk = its.find((x) => x.link)?.link ?? ''
+  }
+  // Como no Bubble (Main): com frete, quantidade 1 e valor = itens + frete; o
+  // frete vai por último nos itens, marcado, e a descrição fica só com os itens
+  if (fe > 0) {
+    q = 1; v = r2(total + fe)
+    its.push({ descricao: 'Frete', quantidade: 1, valor_unitario: fe, frete: true })
   }
   const p = F.fp === 'Pix' ? pixInfo(F.px) : null
   const body: Record<string, unknown> = {
@@ -350,17 +363,21 @@ function montaBody(F: Form, id: string | null, reenvio: string | null, usuario: 
 
 function formDe(o: Solicitacao): Form {
   let its: Item[] = []
+  let fe = 0
+  let temItens = false
   try {
-    const raw = JSON.parse(o.itens || '[]') as { descricao?: string; quantidade?: number; valor_unitario?: number; link?: string }[]
-    its = raw.map((x) => ({ k: seq++, ds: x.descricao ?? '', q: String(x.quantidade ?? 1), v: deNum(x.valor_unitario), lk: x.link ?? '' }))
+    const raw = JSON.parse(o.itens || '[]') as ItemSalvo[]
+    temItens = raw.length > 0
+    fe = r2(raw.filter((x) => x.frete === true).reduce((s, x) => s + (x.quantidade ?? 1) * (x.valor_unitario ?? 0), 0))
+    its = raw.filter((x) => x.frete !== true).map((x) => ({ k: seq++, ds: x.descricao ?? '', q: String(x.quantidade ?? 1), v: deNum(x.valor_unitario), lk: x.link ?? '' }))
   } catch { /* itens antigos sem JSON */ }
-  if (!its.length) its = [{ k: seq++, ds: o.descricao ?? '', q: String(o.quantidade ?? 1), v: deNum(o.valor_estimado), lk: '' }]
+  if (!its.length) its = temItens ? [novoItem()] : [{ k: seq++, ds: o.descricao ?? '', q: String(o.quantidade ?? 1), v: deNum(o.valor_estimado), lk: '' }]
   const arq = (o.anexos ?? []).map((u) => ({ k: seq++, nome: nomeArquivo(u), url: u, st: 'ok' as const }))
   const fot = (o.fotos ?? []).map((u) => ({ k: seq++, nome: nomeArquivo(u), url: u, st: 'ok' as const }))
   return {
-    tp: o.tipo || 'Compra', ui: o.unidade ?? '', fi: o.frota ?? '', du: !!o.da_unidade, oc: o.onde_comprar ?? '',
-    it: its, fp: o.forma_pagamento ?? '', px: o.pix_chave ?? '', lp: o.link_pagamento ?? '',
-    vb: deBubble(o.vencimento_boleto), dl: deBubble(o.data_limite), urg: !!o.urgente, obs: o.observacao ?? '', arq, fot,
+    tp: o.tipo || 'Compra', ui: o.unidade ?? '', fi: o.frota ?? '', du: ehSim(o.da_unidade), oc: o.onde_comprar ?? '',
+    it: its, fe: deNum(fe), fp: o.forma_pagamento ?? '', px: o.pix_chave ?? '', lp: o.link_pagamento ?? '',
+    vb: deBubble(o.vencimento_boleto), dl: deBubble(o.data_limite), urg: ehSim(o.urgente), obs: o.observacao ?? '', arq, fot,
   }
 }
 
@@ -489,10 +506,12 @@ export default function SolicitarCompraPage() {
     setErros((e) => { if (!e[chave] && !e.it) return e; const n = { ...e }; delete n[chave]; delete n.it; return n })
   }
 
-  const total = r2(F.it.reduce((s, x) => s + qN(x) * vN(x), 0))
+  const totalItens = r2(F.it.reduce((s, x) => s + qN(x) * vN(x), 0))
+  const frete = feN(F)
+  const total = r2(totalItens + frete)
   const sujo = (() => {
     const x = F.it[0]
-    return F.tp !== 'Compra' || !!(F.oc || F.fp || F.px || F.lp || F.vb || F.dl || F.urg || F.obs || F.arq.length || F.fot.length || F.it.length > 1 || x?.ds || x?.v || x?.lk || (x && x.q !== '1'))
+    return F.tp !== 'Compra' || !!(F.oc || F.fp || F.px || F.lp || F.vb || F.dl || F.urg || F.obs || F.fe || F.arq.length || F.fot.length || F.it.length > 1 || x?.ds || x?.v || x?.lk || (x && x.q !== '1'))
   })()
 
   function irPara(p: number) {
@@ -829,14 +848,27 @@ export default function SolicitarCompraPage() {
                         </div>
                       ))}
                       {erros.it && <p className="text-sm text-red-600 font-medium">{erros.it}</p>}
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <button onClick={() => setF((f) => ({ ...f, it: [...f.it, novoItem()] }))} className="inline-flex items-center gap-2 min-h-10 px-4 rounded-xl border border-dashed border-[#B9C0D0] text-sm font-medium hover:bg-slate-50">
-                          <Plus className="w-4 h-4" /> Adicionar item
-                        </button>
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">{F.it.length} {F.it.length === 1 ? 'item' : 'itens'} · Total estimado </span>
-                          <b className="font-mono text-base">{moeda(total)}</b>
+                      <button onClick={() => setF((f) => ({ ...f, it: [...f.it, novoItem()] }))} className="inline-flex items-center gap-2 min-h-10 px-4 rounded-xl border border-dashed border-[#B9C0D0] text-sm font-medium hover:bg-slate-50">
+                        <Plus className="w-4 h-4" /> Adicionar item
+                      </button>
+                      <div className="rounded-xl border border-[#CDE8C9] bg-[#FBFEFA] px-4 py-3.5 space-y-2">
+                        <label htmlFor="sc-fe" className="text-sm font-semibold flex items-center gap-2">
+                          <Truck className="w-4 h-4 text-[#2E7D2A]" /> Frete <span className="font-normal text-muted-foreground">(opcional)</span>
+                        </label>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <div className="relative w-full sm:w-52">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-mono">R$</span>
+                            <input id="sc-fe" inputMode="numeric" autoComplete="off" value={F.fe} onChange={(e) => set('fe', mascV(e.target.value))} className={`${inputCls} pl-10 font-mono`} placeholder="0,00" />
+                          </div>
+                          <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">O que a loja cobra para entregar. Soma no total do pedido.</p>
                         </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-3 text-sm">
+                        <span className="text-muted-foreground">{F.it.length} {F.it.length === 1 ? 'item' : 'itens'}{frete > 0 ? ' + frete' : ''} · Total estimado</span>
+                        <span className="text-right">
+                          <b className="font-mono text-base block">{moeda(total)}</b>
+                          {frete > 0 && <small className="font-mono text-xs text-muted-foreground">itens {moeda(totalItens)} + frete {moeda(frete)}</small>}
+                        </span>
                       </div>
                     </div>
                   </>
@@ -939,6 +971,7 @@ export default function SolicitarCompraPage() {
                               {F.it.map((x) => (
                                 <div key={x.k} className="flex justify-between gap-3"><span className="truncate">{qN(x)}× {x.ds || 'sem descrição'}</span><span className="font-mono shrink-0">{moeda(qN(x) * vN(x))}</span></div>
                               ))}
+                              {frete > 0 && <div className="flex justify-between gap-3"><span>Frete</span><span className="font-mono shrink-0">{moeda(frete)}</span></div>}
                               <div className="flex justify-between gap-3 pt-1 font-semibold"><span>Total estimado</span><span className="font-mono">{moeda(total)}</span></div>
                             </div>
                           }
@@ -991,6 +1024,7 @@ export default function SolicitarCompraPage() {
                   <Resumo k="Unidade" v={unidadeNome || 'sem unidade'} />
                   <Resumo k="Frota" v={frotaNome || '-'} />
                   <Resumo k="Itens" v={F.it.some((x) => x.ds) ? String(F.it.length) : 'nenhum ainda'} />
+                  <Resumo k="Frete" v={frete > 0 ? moeda(frete) : 'sem frete'} />
                   <Resumo k="Pagamento" v={F.fp || 'não informado'} />
                   <Resumo k="Prazo" v={F.dl ? fmtData(paraBubble(F.dl)) : 'sem prazo'} />
                 </dl>
@@ -1172,14 +1206,14 @@ function ListaSolicitacoes(p: {
             const st = STATUS[k]
             const ab = p.aberto === o._id
             const nv = reenviados.get(o._id)
-            const meta = [o.tipo, o.unidade_nome, o.da_unidade ? 'Da unidade' : o.frota_nome].filter(Boolean).join(' · ')
+            const meta = [o.tipo, o.unidade_nome, ehSim(o.da_unidade) ? 'Da unidade' : o.frota_nome].filter(Boolean).join(' · ')
             return (
               <article key={o._id} className="rounded-2xl bg-white border border-[#E2E4F0] overflow-hidden">
                 <button onClick={() => p.setAberto(ab ? null : o._id)} className="w-full text-left flex items-start gap-3 p-4 hover:bg-slate-50/60">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className={`rounded-full text-xs font-semibold px-2.5 py-0.5 ${st.cls}`}>{st.n}</span>
-                      {o.urgente && <span className="rounded-full bg-red-100 text-red-700 text-xs font-bold px-2.5 py-0.5">URGENTE</span>}
+                      {ehSim(o.urgente) && <span className="rounded-full bg-red-100 text-red-700 text-xs font-bold px-2.5 py-0.5">URGENTE</span>}
                       <span className="text-xs text-muted-foreground">{fmtDataHora(o['Created Date'])}</span>
                     </div>
                     <p className="font-semibold truncate">{o.descricao || 'Pedido sem descrição'}</p>
@@ -1230,8 +1264,10 @@ function ListaSolicitacoes(p: {
 }
 
 function Detalhe({ o }: { o: Solicitacao }) {
-  let its: { descricao?: string; quantidade?: number; valor_unitario?: number; link?: string }[] = []
+  let its: ItemSalvo[] = []
   try { its = JSON.parse(o.itens || '[]') } catch { /* antigo */ }
+  // O frete vem por último, marcado: mostra como "Frete", sem a quantidade
+  its = [...its.filter((x) => x.frete !== true), ...its.filter((x) => x.frete === true)]
   const linha = (k: string, v?: React.ReactNode) => (v ? <div className="flex gap-3"><dt className="w-36 shrink-0 text-muted-foreground">{k}</dt><dd className="flex-1 min-w-0 break-words">{v}</dd></div> : null)
   return (
     <div className="border-t border-[#EEF0F4] bg-[#F8F9FC] px-4 py-4 space-y-4 text-sm animate-in fade-in duration-200">
@@ -1239,7 +1275,7 @@ function Detalhe({ o }: { o: Solicitacao }) {
         <div className="space-y-1">
           {its.map((x, i) => (
             <div key={i} className="flex justify-between gap-3">
-              <span className="min-w-0 truncate">{x.quantidade}× {x.descricao} {x.link && <a href={x.link} target="_blank" rel="noopener" className="text-[#3B82F6] inline-flex items-center gap-0.5">link <ExternalLink className="w-3 h-3" /></a>}</span>
+              <span className="min-w-0 truncate">{x.frete === true ? 'Frete' : `${x.quantidade}× ${x.descricao ?? ''}`} {x.link && <a href={x.link} target="_blank" rel="noopener" className="text-[#3B82F6] inline-flex items-center gap-0.5">link <ExternalLink className="w-3 h-3" /></a>}</span>
               <span className="font-mono shrink-0">{moeda((x.quantidade ?? 0) * (x.valor_unitario ?? 0))}</span>
             </div>
           ))}
