@@ -6,6 +6,14 @@ import { Camera, Video, Gauge, MapPin, CheckCircle2, AlertTriangle, ChevronLeft,
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { gerarPdfVistoriaEntrega } from '@/lib/gerar-pdf-vistoria'
+import { MSG_POSICAO_DESATUALIZADA, posicaoDesatualizada, posicaoValida, type LocalizacaoRastreador } from '@/lib/rastreador'
+
+// Situação de cada rastreador no teste: posição recente, posição com mais de 4h, ou nenhuma
+type SinalRastreador = 'ok' | 'desatualizado' | 'sem-sinal'
+function sinalRastreador(loc?: LocalizacaoRastreador): SinalRastreador {
+  if (posicaoValida(loc)) return 'ok'
+  return posicaoDesatualizada(loc) ? 'desatualizado' : 'sem-sinal'
+}
 import { GravadorVideo } from '@/components/gravador-video'
 
 // Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
@@ -211,16 +219,16 @@ function VistoriaEntregaContent() {
   }, [placa])
 
   // Testa os rastreadores (GETRAK + ModoTrack) — principal e backup precisam
-  // devolver posição, senão a vistoria não começa (mesma regra da substituição)
+  // devolver posição com no máximo 4h, senão a vistoria não começa (mesma regra da substituição)
   const [rastreador, setRastreador] = useState<{
     status: 'testando' | 'ok' | 'falhou'
-    principal: boolean
-    backup: boolean
-  }>({ status: 'testando', principal: false, backup: false })
+    principal: SinalRastreador
+    backup: SinalRastreador
+  }>({ status: 'testando', principal: 'sem-sinal', backup: 'sem-sinal' })
 
   const testarRastreador = useCallback(async () => {
     if (!placa) return
-    setRastreador({ status: 'testando', principal: false, backup: false })
+    setRastreador({ status: 'testando', principal: 'sem-sinal', backup: 'sem-sinal' })
     try {
       const res = await fetch('/api/rastreador', {
         method: 'POST',
@@ -228,14 +236,15 @@ function VistoriaEntregaContent() {
         body: JSON.stringify({ placa: placa.trim().toUpperCase() }),
       })
       const data = await res.json()
-      const temPos = (l?: { lat: number | null; long: number | null }) => l?.lat != null && l?.long != null
+      const principal = sinalRastreador(data?.localizacoes?.principal)
+      const backup = sinalRastreador(data?.localizacoes?.backup)
       setRastreador({
-        status: data?.ok ? 'ok' : 'falhou',
-        principal: temPos(data?.localizacoes?.principal),
-        backup: temPos(data?.localizacoes?.backup),
+        status: principal === 'ok' && backup === 'ok' ? 'ok' : 'falhou',
+        principal,
+        backup,
       })
     } catch {
-      setRastreador({ status: 'falhou', principal: false, backup: false })
+      setRastreador({ status: 'falhou', principal: 'sem-sinal', backup: 'sem-sinal' })
     }
   }, [placa])
 
@@ -323,19 +332,26 @@ function VistoriaEntregaContent() {
   }
 
   if (rastreador.status === 'falhou') {
+    const desatualizado = rastreador.principal === 'desatualizado' || rastreador.backup === 'desatualizado'
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#080C1F] via-[#1B2043] to-[#2E4080] flex items-center justify-center p-4">
         <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.2)] p-6 text-center max-w-sm w-full">
           <div className="w-16 h-16 rounded-2xl bg-red-500/20 flex items-center justify-center mx-auto mb-4">
             <XCircle className="w-8 h-8 text-red-400" />
           </div>
-          <h2 className="text-lg font-bold text-white mb-2">Rastreador sem sinal</h2>
-          <p className="text-sm text-white/60 mb-4">A vistoria nao pode ser iniciada porque o rastreador da moto {placa.toUpperCase()} nao respondeu. Comunique o responsavel da base.</p>
+          <h2 className="text-lg font-bold text-white mb-2">{desatualizado ? MSG_POSICAO_DESATUALIZADA : 'Rastreador sem sinal'}</h2>
+          <p className="text-sm text-white/60 mb-4">
+            {desatualizado
+              ? `A vistoria nao pode ser iniciada porque a ultima posicao do rastreador da moto ${placa.toUpperCase()} tem mais de 4 horas. Comunique o responsavel da base.`
+              : `A vistoria nao pode ser iniciada porque o rastreador da moto ${placa.toUpperCase()} nao respondeu. Comunique o responsavel da base.`}
+          </p>
           <div className="space-y-2 mb-4 text-left">
-            {([['Principal', rastreador.principal], ['Backup', rastreador.backup]] as const).map(([nome, ok]) => (
-              <div key={nome} className={`flex items-center justify-between rounded-lg px-3 py-2 ${ok ? 'bg-[#22C55E]/10' : 'bg-red-500/10'}`}>
+            {([['Principal', rastreador.principal], ['Backup', rastreador.backup]] as const).map(([nome, sinal]) => (
+              <div key={nome} className={`flex items-center justify-between rounded-lg px-3 py-2 ${sinal === 'ok' ? 'bg-[#22C55E]/10' : sinal === 'desatualizado' ? 'bg-white/10' : 'bg-red-500/10'}`}>
                 <span className="text-sm text-white/80">{nome}</span>
-                <span className={`text-xs font-semibold ${ok ? 'text-[#4ADE80]' : 'text-red-300'}`}>{ok ? 'Respondeu' : 'Sem sinal'}</span>
+                <span className={`text-xs font-semibold ${sinal === 'ok' ? 'text-[#4ADE80]' : sinal === 'desatualizado' ? 'text-white/60' : 'text-red-300'}`}>
+                  {sinal === 'ok' ? 'Respondeu' : sinal === 'desatualizado' ? 'Desatualizado' : 'Sem sinal'}
+                </span>
               </div>
             ))}
           </div>

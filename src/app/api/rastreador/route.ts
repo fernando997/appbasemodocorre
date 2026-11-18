@@ -7,6 +7,7 @@ import {
   RASTREADOR_SUPABASE_KEY,
   RASTREADOR_SUPABASE_ANON_KEY,
 } from '@/lib/config'
+import { LIMITE_POSICAO_MS, temPosicao, posicaoValida } from '@/lib/rastreador'
 
 const MODOTRACK_URL = 'https://app.modotrack.com.br/api/v1/fleet/position-snapshot'
 const GETRAK_TOKEN_URL = 'https://api.getrak.com/newkoauth/oauth/token'
@@ -17,17 +18,45 @@ const GETRAK_LOCALIZACOES_URL = 'https://api.getrak.com/v0.1/localizacoes'
 const SUPABASE_RPC_BASE = RASTREADOR_SUPABASE_URL.split('/rpc/')[0] + '/rpc'
 
 type Plataforma = 'GETRAK' | 'MODOTRACK'
-type Loc = { lat: number | null; long: number | null; plataforma: Plataforma | null }
+// dataHora: data/hora da posição em ISO (com fuso), ou null quando a plataforma não informa
+// desatualizada: posição com mais de 4h (ou sem data) — é devolvida para a tela
+// mostrar, mas não conta no `ok`
+type Loc = {
+  lat: number | null
+  long: number | null
+  plataforma: Plataforma | null
+  dataHora: string | null
+  desatualizada: boolean
+}
 type Resultado = {
   ok: boolean
   localizacoes: Record<string, Loc>
 }
 
-const SEM_SINAL: Loc = { lat: null, long: null, plataforma: null }
-const IDADE_MAXIMA_MS = 8 * 60 * 60 * 1000 // 8h
+const SEM_SINAL: Loc = { lat: null, long: null, plataforma: null, dataHora: null, desatualizada: false }
 
-function temPosicao(loc: Loc | undefined | null): boolean {
-  return loc?.lat != null && loc?.long != null
+// Monta a posição já com a regra das 4h (vale para GETRAK e ModoTrack).
+// ts = data/hora da posição em ms; sem data não dá para provar que é recente.
+function montarLoc(lat: number, long: number, plataforma: Plataforma, ts: number | null): Loc {
+  return {
+    lat,
+    long,
+    plataforma,
+    dataHora: ts != null ? new Date(ts).toISOString() : null,
+    desatualizada: ts == null || Date.now() - ts > LIMITE_POSICAO_MS,
+  }
+}
+
+// A moto pode ter o mesmo rastreador nas duas plataformas: fica a posição
+// válida; se nenhuma for válida, a mais recente (para mostrar como desatualizada)
+function escolherLoc(a: Loc, b: Loc): Loc {
+  if (posicaoValida(a)) return a
+  if (posicaoValida(b)) return b
+  if (!temPosicao(a)) return b
+  if (!temPosicao(b)) return a
+  const tsA = a.dataHora ? new Date(a.dataHora).getTime() : 0
+  const tsB = b.dataHora ? new Date(b.dataHora).getTime() : 0
+  return tsB > tsA ? b : a
 }
 
 // ---------------------------------------------------------------
@@ -184,11 +213,7 @@ async function buscarLocalizacaoGetrak(id: string, rotulo: string, token: string
     const long = veiculo.lon ?? veiculo.lng ?? null
     if (lat == null || long == null) return SEM_SINAL
 
-    const ts = parseDataGetrak(veiculo.datastatus)
-    const idade = ts != null ? Date.now() - ts : null
-    const fresco = idade != null && idade <= IDADE_MAXIMA_MS
-
-    return fresco ? { lat: Number(lat), long: Number(long), plataforma: 'GETRAK' } : SEM_SINAL
+    return montarLoc(Number(lat), Number(long), 'GETRAK', parseDataGetrak(veiculo.datastatus))
   } catch {
     return SEM_SINAL
   }
@@ -209,6 +234,24 @@ async function buscarGetrak(placaFmt: string): Promise<{ principal: Loc; backup:
 // ---------------------------------------------------------------
 // Consulta ModoTrack - retorna principal/backup/tag (tag é só informativo)
 // ---------------------------------------------------------------
+// Data/hora da posição no ModoTrack. Principal e backup trazem `data_hora_evento`
+// (com fuso); a tag só traz `data_hora_ultimo_pacote`, sem fuso — horário de Brasília.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function dataHoraModotrack(item: any): number | null {
+  const bruto = item?.data_hora_evento ?? item?.ultima_posicao?.data_hora_evento ?? item?.data_hora_ultimo_pacote
+  if (!bruto) return null
+  const texto = String(bruto).trim()
+  const comFuso = /(Z|[+-]\d{2}:?\d{2})$/.test(texto) ? texto : `${texto}-03:00`
+  const ts = new Date(comFuso).getTime()
+  return Number.isNaN(ts) ? null : ts
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function locModotrack(item: any): Loc {
+  if (item?.latitude == null || item?.longitude == null) return SEM_SINAL
+  return montarLoc(Number(item.latitude), Number(item.longitude), 'MODOTRACK', dataHoraModotrack(item))
+}
+
 async function buscarModotrack(placaFmt: string): Promise<{ principal: Loc; backup: Loc; tag: Loc }> {
   try {
     const res = await fetch(`${MODOTRACK_URL}/${placaFmt}`, {
@@ -224,15 +267,9 @@ async function buscarModotrack(placaFmt: string): Promise<{ principal: Loc; back
     if (!res.ok) return { principal: SEM_SINAL, backup: SEM_SINAL, tag: SEM_SINAL }
 
     return {
-      principal: data?.principal?.latitude != null && data?.principal?.longitude != null
-        ? { lat: data.principal.latitude, long: data.principal.longitude, plataforma: 'MODOTRACK' }
-        : SEM_SINAL,
-      backup: data?.backup?.latitude != null && data?.backup?.longitude != null
-        ? { lat: data.backup.latitude, long: data.backup.longitude, plataforma: 'MODOTRACK' }
-        : SEM_SINAL,
-      tag: data?.tag?.latitude != null && data?.tag?.longitude != null
-        ? { lat: data.tag.latitude, long: data.tag.longitude, plataforma: 'MODOTRACK' }
-        : SEM_SINAL,
+      principal: locModotrack(data?.principal),
+      backup: locModotrack(data?.backup),
+      tag: locModotrack(data?.tag),
     }
   } catch {
     return { principal: SEM_SINAL, backup: SEM_SINAL, tag: SEM_SINAL }
@@ -250,13 +287,14 @@ export async function POST(req: NextRequest) {
     const [getrak, modotrack] = await Promise.all([buscarGetrak(placaFmt), buscarModotrack(placaFmt)])
 
     const localizacoes: Record<string, Loc> = {
-      principal: temPosicao(getrak.principal) ? getrak.principal : modotrack.principal,
-      backup: temPosicao(getrak.backup) ? getrak.backup : modotrack.backup,
+      principal: escolherLoc(getrak.principal, modotrack.principal),
+      backup: escolherLoc(getrak.backup, modotrack.backup),
       tag: modotrack.tag,
     }
 
+    // Principal e backup precisam ter posição com no máximo 4h; a tag é só informativa
     const resultado: Resultado = {
-      ok: temPosicao(localizacoes.principal) && temPosicao(localizacoes.backup),
+      ok: posicaoValida(localizacoes.principal) && posicaoValida(localizacoes.backup),
       localizacoes,
     }
     return NextResponse.json(resultado)

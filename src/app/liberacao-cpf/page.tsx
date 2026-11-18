@@ -20,6 +20,7 @@ import { Separator } from '@/components/ui/separator'
 import { PlacaCameraPicker } from '@/components/placa-camera-picker'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { MSG_POSICAO_DESATUALIZADA, posicaoDesatualizada, posicaoValida, type LocalizacaoRastreador } from '@/lib/rastreador'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function chamarBubble(endpoint: string, body: Record<string, unknown>): Promise<any> {
@@ -50,7 +51,8 @@ type Validacao = {
   motivos: string[]
 }
 
-type StatusRastreador = 'testando' | 'ok' | 'falhou'
+// 'desatualizado' = principal ou backup devolveu posição com mais de 4h
+type StatusRastreador = 'testando' | 'ok' | 'falhou' | 'desatualizado'
 
 // Mesmas regras da operacional_consulta_de_veiculo-v2 do Bubble
 function validarLiberacao(r: ResultadoLiberacao, rastreador: StatusRastreador): Validacao {
@@ -78,6 +80,10 @@ function validarLiberacao(r: ResultadoLiberacao, rastreador: StatusRastreador): 
     motivos.push('Não há indicação de condutor ativa para este contrato.')
   }
 
+  if (rastreador === 'desatualizado') {
+    motivos.push(MSG_POSICAO_DESATUALIZADA + ': a última posição do principal e do backup precisa ter no máximo 4 horas.')
+  }
+
   if (rastreador === 'falhou') {
     motivos.push('Rastreador sem comunicação: o principal e o backup precisam devolver posição (ModoTrack ou Getrak).')
   }
@@ -87,8 +93,8 @@ function validarLiberacao(r: ResultadoLiberacao, rastreador: StatusRastreador): 
 }
 
 // Rastreamento trava a liberação: principal e backup precisam devolver
-// posição (ModoTrack ou Getrak); a tag é só informativa
-type LocRastreador = { lat: number | null; long: number | null; plataforma: string | null }
+// posição com no máximo 4h (ModoTrack ou Getrak); a tag é só informativa
+type LocRastreador = LocalizacaoRastreador
 
 async function testarRastreador(placa: string): Promise<{ status: StatusRastreador; localizacoes: Record<string, LocRastreador> }> {
   try {
@@ -99,8 +105,11 @@ async function testarRastreador(placa: string): Promise<{ status: StatusRastread
     })
     const data = await res.json()
     const localizacoes = (data?.localizacoes ?? {}) as Record<string, LocRastreador>
-    const temPos = (l?: LocRastreador) => l?.lat != null && l?.long != null
-    return { status: temPos(localizacoes.principal) && temPos(localizacoes.backup) ? 'ok' : 'falhou', localizacoes }
+    const obrigatorios = [localizacoes.principal, localizacoes.backup]
+    const status: StatusRastreador = obrigatorios.every((l) => posicaoValida(l))
+      ? 'ok'
+      : obrigatorios.some((l) => posicaoDesatualizada(l)) ? 'desatualizado' : 'falhou'
+    return { status, localizacoes }
   } catch {
     return { status: 'falhou', localizacoes: {} }
   }
@@ -472,14 +481,16 @@ function LiberacaoCpfContent() {
                     </div>
                     {(['principal', 'backup', 'tag'] as const).map((tipo) => {
                       const loc = locsRastreador[tipo]
-                      const ok = loc?.lat != null && loc?.long != null
+                      const ok = posicaoValida(loc)
+                      // devolveu posição, mas com mais de 4h — cinza, com link para conferir no mapa
+                      const desatualizada = posicaoDesatualizada(loc)
                       // tag sem posição não trava: fica neutra em vez de vermelha
                       const opcional = tipo === 'tag'
                       return (
-                        <div key={tipo} className={`flex items-center justify-between gap-2 px-3 py-2.5 border-t ${ok ? 'bg-green-50' : opcional ? 'bg-zinc-50' : 'bg-red-50'}`}>
+                        <div key={tipo} className={`flex items-center justify-between gap-2 px-3 py-2.5 border-t ${ok ? 'bg-green-50' : opcional || desatualizada ? 'bg-zinc-50' : 'bg-red-50'}`}>
                           <div className="min-w-0">
                             <span className="text-sm font-medium capitalize">{tipo}</span>
-                            {ok && loc?.plataforma && <span className="ml-2 text-xs text-muted-foreground">{loc.plataforma}</span>}
+                            {(ok || desatualizada) && loc?.plataforma && <span className="ml-2 text-xs text-muted-foreground">{loc.plataforma}</span>}
                           </div>
                           {ok ? (
                             <a
@@ -490,6 +501,16 @@ function LiberacaoCpfContent() {
                             >
                               <MapPin className="w-3.5 h-3.5" />
                               Ver localização
+                            </a>
+                          ) : desatualizada ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${loc!.lat},${loc!.long}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs font-semibold text-zinc-600 hover:underline shrink-0 text-right"
+                            >
+                              <MapPin className="w-3.5 h-3.5 shrink-0" />
+                              {MSG_POSICAO_DESATUALIZADA}
                             </a>
                           ) : (
                             <span className={`flex items-center gap-1 text-xs font-semibold shrink-0 ${opcional ? 'text-zinc-500' : 'text-red-600'}`}>

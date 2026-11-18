@@ -33,6 +33,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { getUnidadesAtivas } from '@/lib/unidade-ativa'
+import { MSG_POSICAO_DESATUALIZADA, posicaoDesatualizada, posicaoValida, type LocalizacaoRastreador } from '@/lib/rastreador'
 import { format } from 'date-fns'
 
 type Registro = Record<string, unknown>
@@ -76,12 +77,8 @@ function iconePorTexto(texto: string): LucideIcon {
   return Tag
 }
 
-type Loc = { lat: number | null; long: number | null }
+type Loc = LocalizacaoRastreador
 type ResultadoSinal = { plataforma: string | null; localizacoes: Record<string, Loc> }
-
-function temPosicao(loc: Loc | undefined): boolean {
-  return loc?.lat != null && loc?.long != null
-}
 
 // Mesma chamada de teste de rastreador usada em /movimentacao (vistoria)
 async function emitirSinal(placa: string): Promise<ResultadoSinal> {
@@ -246,7 +243,8 @@ function ConteudoAcaoPopup({
     try {
       const res = await emitirSinal(placa)
       setResultado(res)
-      const ambosResponderam = temPosicao(res.localizacoes.principal) && temPosicao(res.localizacoes.backup)
+      // só confirma o teste se principal e backup tiverem posição com no máximo 4h
+      const ambosResponderam = posicaoValida(res.localizacoes.principal) && posicaoValida(res.localizacoes.backup)
       if (ambosResponderam) {
         await confirmarTesteRastreamento(String(agendado._id))
         onAtualizado?.()
@@ -269,9 +267,10 @@ function ConteudoAcaoPopup({
               <p className="text-xs font-medium text-zinc-600">Resposta do rastreador</p>
             </div>
             {Object.entries(resultado.localizacoes).map(([tipo, loc]) => {
-              const respondeu = temPosicao(loc)
+              const respondeu = posicaoValida(loc)
+              const desatualizada = posicaoDesatualizada(loc)
               return (
-                <div key={tipo} className={`flex items-center justify-between px-3 py-2.5 border-t ${respondeu ? 'bg-green-50' : 'bg-red-50'}`}>
+                <div key={tipo} className={`flex items-center justify-between px-3 py-2.5 border-t ${respondeu ? 'bg-green-50' : desatualizada ? 'bg-zinc-50' : 'bg-red-50'}`}>
                   <span className="text-sm font-medium capitalize">{tipo}</span>
                   <div className="flex items-center gap-1.5">
                     {respondeu ? (
@@ -279,6 +278,8 @@ function ConteudoAcaoPopup({
                         <CheckCircle2 className="w-4 h-4 text-green-500" />
                         <span className="text-xs font-semibold text-green-700">Respondeu</span>
                       </>
+                    ) : desatualizada ? (
+                      <span className="text-xs font-semibold text-zinc-600 text-right">{MSG_POSICAO_DESATUALIZADA}</span>
                     ) : (
                       <>
                         <XCircle className="w-4 h-4 text-red-500" />

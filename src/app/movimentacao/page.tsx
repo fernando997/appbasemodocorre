@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { gerarPdfVistoria } from '@/lib/gerar-pdf-vistoria'
 import { PlacaCameraPicker } from '@/components/placa-camera-picker'
 import { GravadorVideo } from '@/components/gravador-video'
+import { LocalizacaoRastreadorItem, type LocalizacaoRastreador, type EnderecoRastreador } from '@/components/rastreador/localizacao-item'
+import { AvisoRastreadorBloqueado } from '@/components/rastreador/aviso-bloqueio'
 
 // Proxy server-side — esconde apikey/BUBBLE_PRIVATE_KEY do navegador
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -451,8 +453,8 @@ export default function MovimentacaoPage() {
   const [fotoNovaSub, setFotoNovaSub] = useState<string | null>(null)
   const [analisandoNovaSub, setAnalisandoNovaSub] = useState(false)
   const [testandoRastreador, setTestandoRastreador] = useState(false)
-  const [rastreadorInfo, setRastreadorInfo] = useState<{ ok: boolean; localizacoes: Record<string, { lat: number | null; long: number | null; plataforma: string | null }> } | null>(null)
-  const [enderecosRastreador, setEnderecosRastreador] = useState<Record<string, string>>({})
+  const [rastreadorInfo, setRastreadorInfo] = useState<{ ok: boolean; localizacoes: Record<string, LocalizacaoRastreador> } | null>(null)
+  const [enderecosRastreador, setEnderecosRastreador] = useState<Record<string, EnderecoRastreador>>({})
   const [linkVistoriaSub, setLinkVistoriaSub] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
   const [linkVistoriaEntrega, setLinkVistoriaEntrega] = useState('')
@@ -754,7 +756,7 @@ export default function MovimentacaoPage() {
         })
           .then(r => r.json())
           .then(d => {
-            if (d?.endereco) setEnderecosRastreador(prev => ({ ...prev, [nome]: d.endereco }))
+            if (d?.endereco) setEnderecosRastreador(prev => ({ ...prev, [nome]: { linha1: d.linha1 ?? null, linha2: d.linha2 ?? null, completo: d.endereco } }))
           })
           .catch(() => {})
       })
@@ -2066,44 +2068,9 @@ export default function MovimentacaoPage() {
                   </Button>
                 </div>
                 <div className="p-4 space-y-2.5">
-                  {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => {
-                    const temSinal = loc.lat != null && loc.long != null
-                    return (
-                      <div
-                        key={nome}
-                        className={`rounded-xl border p-3 flex items-center gap-3 ${temSinal ? 'border-green-200 bg-green-50/50' : 'border-zinc-200 bg-zinc-50'}`}
-                      >
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${temSinal ? 'bg-green-100' : 'bg-zinc-200'}`}>
-                          <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium capitalize">
-                            {nome}
-                            {loc.plataforma && <span className="text-xs font-normal text-muted-foreground"> · {loc.plataforma}</span>}
-                          </p>
-                          {temSinal ? (
-                            <p className="text-xs text-muted-foreground truncate">
-                              {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-zinc-400">Sem sinal</p>
-                          )}
-                        </div>
-                        {temSinal && (
-                          <a
-                            href={`https://www.google.com/maps?q=${loc.lat},${loc.long}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0"
-                          >
-                            <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8">
-                              <MapPin className="w-3.5 h-3.5" /> Ver mapa
-                            </Button>
-                          </a>
-                        )}
-                      </div>
-                    )
-                  })}
+                  {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => (
+                    <LocalizacaoRastreadorItem key={nome} nome={nome} loc={loc} endereco={enderecosRastreador[nome]} />
+                  ))}
                 </div>
               </div>
             )}
@@ -2114,10 +2081,7 @@ export default function MovimentacaoPage() {
                   <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
                     <XCircle className="w-7 h-7 text-red-600" />
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-red-800">Sem sinal</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Nenhum rastreador desta moto retornou localização.</p>
-                  </div>
+                  <AvisoRastreadorBloqueado localizacoes={rastreadorInfo.localizacoes} enderecos={enderecosRastreador} complemento="" />
                   <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100 mt-1" onClick={() => testarRastreador(placa)}>
                     <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                   </Button>
@@ -2348,44 +2312,9 @@ export default function MovimentacaoPage() {
                     </Button>
                   </div>
                   <div className="p-4 space-y-2.5">
-                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => {
-                      const temSinal = loc.lat != null && loc.long != null
-                      return (
-                        <div
-                          key={nome}
-                          className={`rounded-xl border p-3 flex items-center gap-3 ${temSinal ? 'border-green-200 bg-green-50/50' : 'border-zinc-200 bg-zinc-50'}`}
-                        >
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${temSinal ? 'bg-green-100' : 'bg-zinc-200'}`}>
-                            <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium capitalize">
-                              {nome}
-                              {loc.plataforma && <span className="text-xs font-normal text-muted-foreground"> · {loc.plataforma}</span>}
-                            </p>
-                            {temSinal ? (
-                              <p className="text-xs text-muted-foreground truncate">
-                                {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-zinc-400">Sem sinal</p>
-                            )}
-                          </div>
-                          {temSinal && (
-                            <a
-                              href={`https://www.google.com/maps?q=${loc.lat},${loc.long}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="shrink-0"
-                            >
-                              <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8">
-                                <MapPin className="w-3.5 h-3.5" /> Ver mapa
-                              </Button>
-                            </a>
-                          )}
-                        </div>
-                      )
-                    })}
+                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => (
+                      <LocalizacaoRastreadorItem key={nome} nome={nome} loc={loc} endereco={enderecosRastreador[nome]} />
+                    ))}
                   </div>
                 </div>
               )}
@@ -2396,10 +2325,7 @@ export default function MovimentacaoPage() {
                     <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
                       <XCircle className="w-7 h-7 text-red-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-red-800">Sem sinal</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a vistoria.</p>
-                    </div>
+                    <AvisoRastreadorBloqueado localizacoes={rastreadorInfo.localizacoes} enderecos={enderecosRastreador} complemento="Não é possível prosseguir com a vistoria." />
                     <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100 mt-1" onClick={() => testarRastreador(placa)}>
                       <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                     </Button>
@@ -3279,44 +3205,9 @@ export default function MovimentacaoPage() {
                     </Button>
                   </div>
                   <div className="p-4 space-y-2.5">
-                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => {
-                      const temSinal = loc.lat != null && loc.long != null
-                      return (
-                        <div
-                          key={nome}
-                          className={`rounded-xl border p-3 flex items-center gap-3 ${temSinal ? 'border-green-200 bg-green-50/50' : 'border-zinc-200 bg-zinc-50'}`}
-                        >
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${temSinal ? 'bg-green-100' : 'bg-zinc-200'}`}>
-                            <MapPin className={`w-4 h-4 ${temSinal ? 'text-green-600' : 'text-zinc-400'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium capitalize">
-                              {nome}
-                              {loc.plataforma && <span className="text-xs font-normal text-muted-foreground"> · {loc.plataforma}</span>}
-                            </p>
-                            {temSinal ? (
-                              <p className="text-xs text-muted-foreground truncate">
-                                {enderecosRastreador[nome] ?? `${loc.lat!.toFixed(5)}, ${loc.long!.toFixed(5)}`}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-zinc-400">Sem sinal</p>
-                            )}
-                          </div>
-                          {temSinal && (
-                            <a
-                              href={`https://www.google.com/maps?q=${loc.lat},${loc.long}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="shrink-0"
-                            >
-                              <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 text-xs h-8">
-                                <MapPin className="w-3.5 h-3.5" /> Ver mapa
-                              </Button>
-                            </a>
-                          )}
-                        </div>
-                      )
-                    })}
+                    {Object.entries(rastreadorInfo.localizacoes).map(([nome, loc]) => (
+                      <LocalizacaoRastreadorItem key={nome} nome={nome} loc={loc} endereco={enderecosRastreador[nome]} />
+                    ))}
                   </div>
                 </div>
               )}
@@ -3327,10 +3218,7 @@ export default function MovimentacaoPage() {
                     <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
                       <XCircle className="w-7 h-7 text-red-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-red-800">Sem sinal</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Nenhum rastreador desta moto retornou localização. Não é possível prosseguir com a substituição.</p>
-                    </div>
+                    <AvisoRastreadorBloqueado localizacoes={rastreadorInfo.localizacoes} enderecos={enderecosRastreador} complemento="Não é possível prosseguir com a substituição." />
                     <Button variant="outline" size="sm" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100 mt-1" onClick={() => testarRastreador(placaNovaSub)}>
                       <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                     </Button>
